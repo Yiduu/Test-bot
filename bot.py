@@ -1,4 +1,5 @@
-import os  
+
+import os 
 import logging
 import psycopg2
 from psycopg2 import sql, IntegrityError, ProgrammingError
@@ -58,9 +59,7 @@ def init_db():
                     privacy_public BOOLEAN DEFAULT TRUE,
                     is_admin BOOLEAN DEFAULT FALSE,
                     waiting_for_private_message BOOLEAN DEFAULT FALSE,
-                    private_message_target TEXT,
-                    aura_points INTEGER DEFAULT 0,  -- --- ADDED: Aura points column ---
-                    awaiting_edit_comment_id INTEGER  -- --- ADDED: For comment editing ---
+                    private_message_target TEXT
                 )
                 ''')
 
@@ -97,9 +96,7 @@ def init_db():
                     content TEXT,
                     type TEXT DEFAULT 'text',
                     file_id TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    deleted_by_user BOOLEAN DEFAULT FALSE,  -- --- ADDED: Soft delete flag ---
-                    edited_at TIMESTAMP  -- --- ADDED: Edit timestamp ---
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 ''')
 
@@ -193,39 +190,6 @@ def db_fetch_one(query, params=()):
 def db_fetch_all(query, params=()):
     return db_execute(query, params, fetch=True)
 
-# --- ADDED: Aura Points Awarding Functions ---
-def award_aura_points(user_id: str, points: int):
-    """Award aura points to a user"""
-    try:
-        success = db_execute(
-            "UPDATE users SET aura_points = aura_points + %s WHERE user_id = %s",
-            (points, user_id)
-        )
-        if success:
-            logging.info(f"Awarded {points} aura points to user {user_id}")
-        return success
-    except Exception as e:
-        logging.error(f"Error awarding aura points: {e}")
-        return False
-
-def award_comment_aura_points(comment_author_id: str, parent_comment_id: int = 0):
-    """Award aura points for comment creation"""
-    try:
-        # Award +2 for comment creation
-        award_aura_points(comment_author_id, 2)
-        
-        # If it's a reply, award +3 to parent comment author
-        if parent_comment_id and parent_comment_id != 0:
-            parent_comment = db_fetch_one(
-                "SELECT author_id FROM comments WHERE comment_id = %s",
-                (parent_comment_id,)
-            )
-            if parent_comment and parent_comment['author_id'] != comment_author_id:
-                award_aura_points(parent_comment['author_id'], 3)
-                logging.info(f"Awarded 3 aura points to parent comment author {parent_comment['author_id']}")
-    except Exception as e:
-        logging.error(f"Error awarding comment aura points: {e}")
-
 # Categories
 CATEGORIES = [
     ("🙏 Pray For Me", "PrayForMe"),
@@ -295,7 +259,7 @@ def calculate_user_rating(user_id):
     post_count = post_row['count'] if post_row else 0
     
     comment_row = db_fetch_one(
-        "SELECT COUNT(*) as count FROM comments WHERE author_id = %s AND deleted_by_user = FALSE",
+        "SELECT COUNT(*) as count FROM comments WHERE author_id = %s",
         (user_id,)
     )
     comment_count = comment_row['count'] if comment_row else 0
@@ -311,12 +275,12 @@ def count_all_comments(post_id):
     def count_replies(parent_id=None):
         if parent_id is None:
             comments = db_fetch_all(
-                "SELECT comment_id FROM comments WHERE post_id = %s AND parent_comment_id = 0 AND deleted_by_user = FALSE",
+                "SELECT comment_id FROM comments WHERE post_id = %s AND parent_comment_id = 0",
                 (post_id,)
             )
         else:
             comments = db_fetch_all(
-                "SELECT comment_id FROM comments WHERE parent_comment_id = %s AND deleted_by_user = FALSE",
+                "SELECT comment_id FROM comments WHERE parent_comment_id = %s",
                 (parent_id,)
             )
         
@@ -341,7 +305,7 @@ def get_user_rank(user_id):
     users = db_fetch_all('''
         SELECT user_id, 
                (SELECT COUNT(*) FROM posts WHERE author_id = users.user_id AND approved = TRUE) + 
-               (SELECT COUNT(*) FROM comments WHERE author_id = users.user_id AND deleted_by_user = FALSE) AS total
+               (SELECT COUNT(*) FROM comments WHERE author_id = users.user_id) AS total
         FROM users
         ORDER BY total DESC
     ''')
@@ -384,9 +348,9 @@ async def update_channel_post_comment_count(context: ContextTypes.DEFAULT_TYPE, 
 
 async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top_users = db_fetch_all('''
-        SELECT user_id, anonymous_name, sex, aura_points,
+        SELECT user_id, anonymous_name, sex,
                (SELECT COUNT(*) FROM posts WHERE author_id = users.user_id AND approved = TRUE) + 
-               (SELECT COUNT(*) FROM comments WHERE author_id = users.user_id AND deleted_by_user = FALSE) AS total
+               (SELECT COUNT(*) FROM comments WHERE author_id = users.user_id) AS total
         FROM users
         ORDER BY total DESC
         LIMIT 10
@@ -396,19 +360,19 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, user in enumerate(top_users, start=1):
         stars = format_stars(user['total'] // 5)
         leaderboard_text += (
-            f"{idx}. {user['anonymous_name']} {user['sex']} - {user['total']} contributions {stars} ✨{user['aura_points']}\n"
+            f"{idx}. {user['anonymous_name']} {user['sex']} - {user['total']} contributions {stars}\n"
         )
     
     user_id = str(update.effective_user.id)
     user_rank = get_user_rank(user_id)
     
     if user_rank and user_rank > 10:
-        user_data = db_fetch_one("SELECT anonymous_name, sex, aura_points FROM users WHERE user_id = %s", (user_id,))
+        user_data = db_fetch_one("SELECT anonymous_name, sex FROM users WHERE user_id = %s", (user_id,))
         if user_data:
             user_contributions = calculate_user_rating(user_id)
             leaderboard_text += (
                 f"\n...\n"
-                f"{user_rank}. {user_data['anonymous_name']} {user_data['sex']} - {user_contributions} contributions ✨{user_data['aura_points']}\n"
+                f"{user_rank}. {user_data['anonymous_name']} {user_data['sex']} - {user_contributions} contributions\n"
             )
     
     keyboard = [
@@ -879,10 +843,6 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
             await query.answer("❌ Unsupported media type.", show_alert=True)
             return
         
-        # --- ADDED: Award aura points for post approval ---
-        award_aura_points(post['author_id'], 5)
-        logging.info(f"Awarded 5 aura points to post author {post['author_id']} for approved post {post_id}")
-        
         # Update the post in database
         success = db_execute(
             "UPDATE posts SET approved = TRUE, admin_approved_by = %s, channel_message_id = %s WHERE post_id = %s",
@@ -897,7 +857,7 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         try:
             await context.bot.send_message(
                 chat_id=post['author_id'],
-                text="✅ Your post has been approved and published! ✨+5 aura points"
+                text="✅ Your post has been approved and published!"
             )
         except Exception as e:
             logger.error(f"Error notifying author: {e}")
@@ -1062,7 +1022,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"👥 Followers: {len(followers)}\n"
                     f"🎖 Batch: User\n"
                     f"⭐️ Contributions: {rating} {stars}\n"
-                    f"✨ Aura Points: {user_data.get('aura_points', 0)}\n"  # --- ADDED: Aura points display ---
                     f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
                     f"_Use /menu to return_",
                     reply_markup=InlineKeyboardMarkup(btn) if btn else None,
@@ -1297,24 +1256,34 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
     offset = (page - 1) * per_page
 
     comments = db_fetch_all(
-        "SELECT * FROM comments WHERE post_id = %s AND parent_comment_id = 0 AND deleted_by_user = FALSE ORDER BY timestamp DESC LIMIT %s OFFSET %s",
+        "SELECT * FROM comments WHERE post_id = %s AND parent_comment_id = 0 ORDER BY timestamp DESC LIMIT %s OFFSET %s",
         (post_id, per_page, offset)
     )
 
     total_comments = count_all_comments(post_id)
     total_pages = (total_comments + per_page - 1) // per_page
 
-    # --- CHANGED: Remove post content header, only show comments ---
-    user_id = str(update.effective_user.id)
+    post_text = post['content']
+    header = f"{escape_markdown(post_text, version=2)}\n\n"
 
     if not comments and page == 1:
         await context.bot.send_message(
             chat_id=chat_id,
-            text="\\_No comments yet.\\_",
+            text=header + "\\_No comments yet.\\_",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=main_menu
         )
         return
+
+    header_msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=header,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=main_menu
+    )
+    header_message_id = header_msg.message_id
+
+    user_id = str(update.effective_user.id)
 
     if reply_pages is None:
         reply_pages = {}
@@ -1325,17 +1294,10 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         display_sex = get_display_sex(commenter)
         display_name = get_display_name(commenter)
         
-        # --- ADDED: Check if comment author is post author ---
-        if commenter_id == post['author_id']:
-            display_name = "📝 Author of the Post"
-            profile_url = f"https://t.me/{BOT_USERNAME}?start=profile_{display_name}"
-        else:
-            profile_url = f"https://t.me/{BOT_USERNAME}?start=profile_{display_name}"
-        
         rating = calculate_user_rating(commenter_id)
         stars = format_stars(rating)
+        profile_url = f"https://t.me/{BOT_USERNAME}?start=profile_{display_name}"
 
-        # --- CHANGED: Add laugh reaction counts ---
         likes_row = db_fetch_one(
             "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'like'",
             (comment['comment_id'],)
@@ -1347,12 +1309,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             (comment['comment_id'],)
         )
         dislikes = dislikes_row['cnt'] if dislikes_row else 0
-        
-        laughs_row = db_fetch_one(  # --- ADDED: Laugh reaction count ---
-            "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'laugh'",
-            (comment['comment_id'],)
-        )
-        laughs = laughs_row['cnt'] if laughs_row else 0
 
         user_reaction = db_fetch_one(
             "SELECT type FROM reactions WHERE comment_id = %s AND user_id = %s",
@@ -1361,35 +1317,24 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
 
         like_emoji = "👍" if user_reaction and user_reaction['type'] == 'like' else "👍"
         dislike_emoji = "👎" if user_reaction and user_reaction['type'] == 'dislike' else "👎"
-        laugh_emoji = "😂" if user_reaction and user_reaction['type'] == 'laugh' else "😂"  # --- ADDED: Laugh reaction emoji ---
 
         comment_text = escape_markdown(comment['content'], version=2)
         author_text = f"[{escape_markdown(display_name, version=2)}]({profile_url}) {display_sex} {stars}"
 
-        # --- CHANGED: Add laugh button and edit/delete buttons for owner ---
-        kb_buttons = [
+        kb = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(f"{like_emoji} {likes}", callback_data=f"likecomment_{comment['comment_id']}"),
                 InlineKeyboardButton(f"{dislike_emoji} {dislikes}", callback_data=f"dislikecomment_{comment['comment_id']}"),
-                InlineKeyboardButton(f"{laugh_emoji} {laughs}", callback_data=f"laughcomment_{comment['comment_id']}"),  # --- ADDED: Laugh button ---
                 InlineKeyboardButton("Reply", callback_data=f"reply_{post_id}_{comment['comment_id']}")
             ]
-        ]
-        
-        # --- ADDED: Edit/Delete buttons for comment owner ---
-        if commenter_id == user_id:
-            kb_buttons.append([
-                InlineKeyboardButton("✏️ Edit", callback_data=f"edit_comment_{comment['comment_id']}"),
-                InlineKeyboardButton("🗑 Delete", callback_data=f"delete_comment_{comment['comment_id']}")
-            ])
-
-        kb = InlineKeyboardMarkup(kb_buttons)
+        ])
 
         msg = await context.bot.send_message(
             chat_id=chat_id,
             text=f"{comment_text}\n\n{author_text}",
             reply_markup=kb,
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_to_message_id=header_message_id
         )
 
         # Recursive function to display replies under this comment
@@ -1399,70 +1344,26 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             if depth > MAX_REPLY_DEPTH:
                 return
             children = db_fetch_all(
-                "SELECT * FROM comments WHERE parent_comment_id = %s AND deleted_by_user = FALSE ORDER BY timestamp",
+                "SELECT * FROM comments WHERE parent_comment_id = %s ORDER BY timestamp",
                 (parent_comment_id,)
             )
             for child in children:
                 reply_user_id = child['author_id']
                 reply_user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (reply_user_id,))
-                
-                # --- ADDED: Check if reply author is post author ---
-                if reply_user_id == post['author_id']:
-                    reply_display_name = "📝 Author of the Post"
-                else:
-                    reply_display_name = get_display_name(reply_user)
-                    
+                reply_display_name = get_display_name(reply_user)
                 reply_display_sex = get_display_sex(reply_user)
                 rating_reply = calculate_user_rating(reply_user_id)
                 stars_reply = format_stars(rating_reply)
                 profile_url_reply = f"https://t.me/{BOT_USERNAME}?start=profile_{reply_display_name}"
                 safe_reply = escape_markdown(child['content'], version=2)
 
-                # --- CHANGED: Add laugh reaction for replies ---
-                reply_likes_row = db_fetch_one(
-                    "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'like'",
-                    (child['comment_id'],)
-                )
-                reply_likes = reply_likes_row['cnt'] if reply_likes_row else 0
-                
-                reply_dislikes_row = db_fetch_one(
-                    "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'dislike'",
-                    (child['comment_id'],)
-                )
-                reply_dislikes = reply_dislikes_row['cnt'] if reply_dislikes_row else 0
-                
-                reply_laughs_row = db_fetch_one(  # --- ADDED: Laugh reaction count for replies ---
-                    "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'laugh'",
-                    (child['comment_id'],)
-                )
-                reply_laughs = reply_laughs_row['cnt'] if reply_laughs_row else 0
-
-                reply_user_reaction = db_fetch_one(
-                    "SELECT type FROM reactions WHERE comment_id = %s AND user_id = %s",
-                    (child['comment_id'], user_id)
-                )
-
-                reply_like_emoji = "👍" if reply_user_reaction and reply_user_reaction['type'] == 'like' else "👍"
-                reply_dislike_emoji = "👎" if reply_user_reaction and reply_user_reaction['type'] == 'dislike' else "👎"
-                reply_laugh_emoji = "😂" if reply_user_reaction and reply_user_reaction['type'] == 'laugh' else "😂"  # --- ADDED: Laugh reaction emoji for replies ---
-
-                reply_kb_buttons = [
+                reply_kb = InlineKeyboardMarkup([
                     [
-                        InlineKeyboardButton(f"{reply_like_emoji} {reply_likes}", callback_data=f"likereply_{child['comment_id']}"),
-                        InlineKeyboardButton(f"{reply_dislike_emoji} {reply_dislikes}", callback_data=f"dislikereply_{child['comment_id']}"),
-                        InlineKeyboardButton(f"{reply_laugh_emoji} {reply_laughs}", callback_data=f"laughreply_{child['comment_id']}"),  # --- ADDED: Laugh button for replies ---
+                        InlineKeyboardButton("👍", callback_data=f"likereply_{child['comment_id']}"),
+                        InlineKeyboardButton("👎", callback_data=f"dislikereply_{child['comment_id']}"),
                         InlineKeyboardButton("Reply", callback_data=f"replytoreply_{post_id}_{parent_comment_id}_{child['comment_id']}")
                     ]
-                ]
-                
-                # --- ADDED: Edit/Delete buttons for reply owner ---
-                if reply_user_id == user_id:
-                    reply_kb_buttons.append([
-                        InlineKeyboardButton("✏️ Edit", callback_data=f"edit_comment_{child['comment_id']}"),
-                        InlineKeyboardButton("🗑 Delete", callback_data=f"delete_comment_{child['comment_id']}")
-                    ])
-
-                reply_kb = InlineKeyboardMarkup(reply_kb_buttons)
+                ])
 
                 # Send this reply under its parent message
                 child_msg = await context.bot.send_message(
@@ -1490,7 +1391,8 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"📄 Page {page}/{total_pages}",
-            reply_markup=pagination_markup
+            reply_markup=pagination_markup,
+            reply_to_message_id=header_message_id
         )
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1559,7 +1461,6 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
             f"👤 *{display_name}* 🎖 \n"
             f"📌 Sex: {display_sex}\n"
             f"⭐️ Rating: {rating} {stars}\n"
-            f"✨ Aura Points: {user.get('aura_points', 0)}\n"  # --- ADDED: Aura points display ---
             f"🎖 Batch: User\n"
             f"👥 Followers: {len(followers)}\n"
             f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
@@ -1567,89 +1468,6 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         ),
         reply_markup=kb,
         parse_mode=ParseMode.MARKDOWN)
-
-# --- ADDED: Comment edit and delete handlers ---
-async def handle_comment_edit(update: Update, context: ContextTypes.DEFAULT_TYPE, comment_id: int):
-    """Handle comment editing flow"""
-    user_id = str(update.effective_user.id)
-    
-    # Verify comment ownership
-    comment = db_fetch_one("SELECT * FROM comments WHERE comment_id = %s", (comment_id,))
-    if not comment or comment['author_id'] != user_id:
-        await update.message.reply_text("❌ You can only edit your own comments.")
-        return
-    
-    # Set editing state
-    context.user_data['editing_comment_id'] = comment_id
-    await update.message.reply_text(
-        "✏️ Please send the new content for your comment:",
-        reply_markup=ForceReply(selective=True)
-    )
-
-async def handle_comment_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, comment_id: int):
-    """Handle comment deletion with confirmation"""
-    query = update.callback_query
-    user_id = str(update.effective_user.id)
-    
-    # Verify comment ownership
-    comment = db_fetch_one("SELECT * FROM comments WHERE comment_id = %s", (comment_id,))
-    if not comment or comment['author_id'] != user_id:
-        await query.answer("❌ You can only delete your own comments.", show_alert=True)
-        return
-    
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Confirm Delete", callback_data=f"confirm_delete_comment_{comment_id}"),
-            InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_delete_comment_{comment_id}")
-        ]
-    ])
-    
-    await query.message.reply_text(
-        "🗑 Are you sure you want to delete this comment? This action cannot be undone.",
-        reply_markup=keyboard
-    )
-
-async def confirm_comment_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, comment_id: int):
-    """Confirm and execute comment deletion"""
-    query = update.callback_query
-    user_id = str(update.effective_user.id)
-    
-    # Verify comment ownership
-    comment = db_fetch_one("SELECT * FROM comments WHERE comment_id = %s", (comment_id,))
-    if not comment or comment['author_id'] != user_id:
-        await query.answer("❌ You can only delete your own comments.", show_alert=True)
-        return
-    
-    try:
-        # Soft delete the comment
-        success = db_execute(
-            "UPDATE comments SET content = '🗑 This comment was deleted by the user.', deleted_by_user = TRUE WHERE comment_id = %s",
-            (comment_id,)
-        )
-        
-        if success:
-            # Try to update the message in chat
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=query.message.chat_id,
-                    message_id=query.message.message_id,
-                    text="🗑 This comment was deleted by the user.",
-                    reply_markup=None  # Remove buttons
-                )
-            except BadRequest:
-                # If we can't edit the original message, just send confirmation
-                await query.message.reply_text("✅ Comment deleted successfully.")
-            
-            await query.answer("✅ Comment deleted successfully.")
-            
-            # Update comment count for the post
-            await update_channel_post_comment_count(context, comment['post_id'])
-        else:
-            await query.answer("❌ Failed to delete comment.", show_alert=True)
-            
-    except Exception as e:
-        logger.error(f"Error deleting comment: {e}")
-        await query.answer("❌ Error deleting comment.", show_alert=True)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1838,46 +1656,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
 
-        # --- CHANGED: Extended reaction handling for laugh reactions ---
-        elif query.data.startswith(("likecomment_", "dislikecomment_", "laughcomment_", "likereply_", "dislikereply_", "laughreply_")):
+        elif query.data.startswith(("likecomment_", "dislikecomment_", "likereply_", "dislikereply_")):
             try:
                 parts = query.data.split('_')
                 comment_id = int(parts[1])
-                
-                # Determine reaction type
-                if parts[0] in ('likecomment', 'likereply'):
-                    reaction_type = 'like'
-                elif parts[0] in ('dislikecomment', 'dislikereply'):
-                    reaction_type = 'dislike'
-                else:  # laughcomment or laughreply
-                    reaction_type = 'laugh'
+                reaction_type = 'like' if parts[0] in ('likecomment', 'likereply') else 'dislike'
 
-                # Get current reaction if any
-                current_reaction = db_fetch_one(
-                    "SELECT type FROM reactions WHERE comment_id = %s AND user_id = %s",
-                    (comment_id, user_id)
-                )
-                
-                # Remove existing reaction
                 db_execute(
                     "DELETE FROM reactions WHERE comment_id = %s AND user_id = %s",
                     (comment_id, user_id)
                 )
 
-                # Toggle behavior: if clicking same reaction, remove it; otherwise add new one
+                current_reaction = db_fetch_one(
+                    "SELECT type FROM reactions WHERE comment_id = %s AND user_id = %s",
+                    (comment_id, user_id)
+                )
+                
                 if not current_reaction or current_reaction['type'] != reaction_type:
                     db_execute(
                         "INSERT INTO reactions (comment_id, user_id, type) VALUES (%s, %s, %s)",
                         (comment_id, user_id, reaction_type)
                     )
-                    
-                    # --- ADDED: Award aura points for reactions ---
-                    comment = db_fetch_one("SELECT author_id FROM comments WHERE comment_id = %s", (comment_id,))
-                    if comment and comment['author_id'] != user_id:
-                        award_aura_points(comment['author_id'], 1)
-                        logging.info(f"Awarded 1 aura point to comment author {comment['author_id']} for reaction")
 
-                # Get updated counts
                 likes_row = db_fetch_one(
                     "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'like'",
                     (comment_id,)
@@ -1889,12 +1689,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     (comment_id,)
                 )
                 dislikes = dislikes_row['cnt'] if dislikes_row else 0
-                
-                laughs_row = db_fetch_one(  # --- ADDED: Laugh reaction count ---
-                    "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'laugh'",
-                    (comment_id,)
-                )
-                laughs = laughs_row['cnt'] if laughs_row else 0
 
                 comment = db_fetch_one(
                     "SELECT post_id, parent_comment_id FROM comments WHERE comment_id = %s",
@@ -1914,15 +1708,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 like_emoji = "👍" if user_reaction and user_reaction['type'] == 'like' else "👍"
                 dislike_emoji = "👎" if user_reaction and user_reaction['type'] == 'dislike' else "👎"
-                laugh_emoji = "😂" if user_reaction and user_reaction['type'] == 'laugh' else "😂"  # --- ADDED: Laugh reaction emoji ---
 
-                # --- CHANGED: Updated keyboard with laugh button ---
                 if parent_comment_id == 0:
                     new_kb = InlineKeyboardMarkup([
                         [
                             InlineKeyboardButton(f"{like_emoji} {likes}", callback_data=f"likecomment_{comment_id}"),
                             InlineKeyboardButton(f"{dislike_emoji} {dislikes}", callback_data=f"dislikecomment_{comment_id}"),
-                            InlineKeyboardButton(f"{laugh_emoji} {laughs}", callback_data=f"laughcomment_{comment_id}"),  # --- ADDED: Laugh button ---
                             InlineKeyboardButton("Reply", callback_data=f"reply_{post_id}_{comment_id}")
                         ]
                     ])
@@ -1931,7 +1722,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         [
                             InlineKeyboardButton(f"{like_emoji} {likes}", callback_data=f"likereply_{comment_id}"),
                             InlineKeyboardButton(f"{dislike_emoji} {dislikes}", callback_data=f"dislikereply_{comment_id}"),
-                            InlineKeyboardButton(f"{laugh_emoji} {laughs}", callback_data=f"laughreply_{comment_id}"),  # --- ADDED: Laugh button for replies ---
                             InlineKeyboardButton("Reply", callback_data=f"replytoreply_{post_id}_{parent_comment_id}_{comment_id}")
                         ]
                     ])
@@ -2171,22 +1961,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text("✅ User has been blocked. They can no longer send you messages.")
             except psycopg2.IntegrityError:
                 await query.message.reply_text("❌ User is already blocked.")
-        
-        # --- ADDED: Comment edit and delete handlers ---
-        elif query.data.startswith('edit_comment_'):
-            comment_id = int(query.data.split('_')[-1])
-            await handle_comment_edit(update, context, comment_id)
-            
-        elif query.data.startswith('delete_comment_'):
-            comment_id = int(query.data.split('_')[-1])
-            await handle_comment_delete(update, context, comment_id)
-            
-        elif query.data.startswith('confirm_delete_comment_'):
-            comment_id = int(query.data.split('_')[-1])
-            await confirm_comment_delete(update, context, comment_id)
-            
-        elif query.data.startswith('cancel_delete_comment_'):
-            await query.message.reply_text("✅ Delete cancelled.")
             
     except Exception as e:
         logger.error(f"Error in button_handler: {e}")
@@ -2261,40 +2035,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (user_id, anon, '👤', is_admin)
         )
         user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (user_id,))
-
-    # --- ADDED: Handle comment editing ---
-    if 'editing_comment_id' in context.user_data:
-        comment_id = context.user_data['editing_comment_id']
-        
-        # Verify comment ownership
-        comment = db_fetch_one("SELECT * FROM comments WHERE comment_id = %s", (comment_id,))
-        if not comment or comment['author_id'] != user_id:
-            await update.message.reply_text("❌ You can only edit your own comments.")
-            del context.user_data['editing_comment_id']
-            return
-        
-        # Update comment content
-        new_content = text
-        success = db_execute(
-            "UPDATE comments SET content = %s, edited_at = CURRENT_TIMESTAMP WHERE comment_id = %s",
-            (new_content, comment_id)
-        )
-        
-        if success:
-            await update.message.reply_text("✅ Comment updated successfully!")
-            
-            # Try to update the message in chat if possible
-            try:
-                # This would require storing message_id with comments, which we don't currently do
-                # For now, we just notify the user
-                pass
-            except Exception as e:
-                logger.error(f"Error updating comment message: {e}")
-        else:
-            await update.message.reply_text("❌ Failed to update comment.")
-        
-        del context.user_data['editing_comment_id']
-        return
 
     if user and user['waiting_for_post']:
         category = user['selected_category']
@@ -2376,9 +2116,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
         await update.message.reply_text("✅ Your comment has been posted!", reply_markup=main_menu)
-        
-        # --- ADDED: Award aura points for comment creation ---
-        award_comment_aura_points(user_id, parent_comment_id)
         
         # Update comment count
         await update_channel_post_comment_count(context, post_id)
