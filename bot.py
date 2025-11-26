@@ -225,12 +225,13 @@ def health_check():
 def uptimerobot_ping():
     return jsonify(status="OK", message="Pong! Bot is alive") 
 
-# Create main menu keyboard
+# Create main menu keyboard with My Vent button
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton("🙏 Ask Question")],
-        [KeyboardButton("👤 View Profile"), KeyboardButton("🏆 Leaderboard")],
-        [KeyboardButton("⚙️ Settings"), KeyboardButton("❓ Help")]
+        [KeyboardButton("👤 View Profile"), KeyboardButton("📝 My Vent")],
+        [KeyboardButton("🏆 Leaderboard"), KeyboardButton("⚙️ Settings")],
+        [KeyboardButton("❓ Help")]
     ],
     resize_keyboard=True,
     one_time_keyboard=False
@@ -1230,12 +1231,9 @@ async def show_comments_menu(update, context, post_id, page=1):
         ]
     ]
 
-    post_text = post['content']
-    escaped_text = escape_markdown(post_text, version=2)
-
     if hasattr(update, 'message') and update.message:
         await update.message.reply_text(
-            f"💬\n{escaped_text}",
+            "💬 *Comments Menu*",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.MARKDOWN_V2
         )
@@ -1314,9 +1312,8 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         like_emoji = "👍" if user_reaction and user_reaction['type'] == 'like' else "👍"
         dislike_emoji = "👎" if user_reaction and user_reaction['type'] == 'dislike' else "👎"
 
-        # FIXED: Use HTML escaping for comment content
+        # Use HTML formatting for comments to avoid URL display issues
         comment_text = comment['content'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        # FIXED: Use HTML link without markdown escaping
         author_text = f'<a href="https://t.me/{BOT_USERNAME}?start=profile_{display_name}">{display_name}</a> {display_sex} {stars}'
 
         kb = InlineKeyboardMarkup([
@@ -1352,7 +1349,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 reply_display_sex = get_display_sex(reply_user)
                 rating_reply = calculate_user_rating(reply_user_id)
                 stars_reply = format_stars(rating_reply)
-                # FIXED: Use HTML escaping for reply content
                 safe_reply = child['content'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
                 reply_kb = InlineKeyboardMarkup([
@@ -1363,7 +1359,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                     ]
                 ])
 
-                # FIXED: Use HTML link without markdown escaping for replies
+                # Use HTML formatting for replies
                 reply_author_text = f'<a href="https://t.me/{BOT_USERNAME}?start=profile_{reply_display_name}">{reply_display_name}</a> {reply_display_sex} {stars_reply}'
                 child_msg = await context.bot.send_message(
                     chat_id=chat_id,
@@ -1392,6 +1388,105 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             reply_markup=pagination_markup,
             reply_to_message_id=header_message_id
         )
+
+async def show_my_vent(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
+    user_id = str(update.effective_user.id)
+    
+    # Get user's posts with pagination
+    per_page = 5
+    offset = (page - 1) * per_page
+    
+    posts = db_fetch_all("""
+        SELECT post_id, content, category, approved, timestamp, media_type, comment_count
+        FROM posts 
+        WHERE author_id = %s 
+        ORDER BY timestamp DESC 
+        LIMIT %s OFFSET %s
+    """, (user_id, per_page, offset))
+    
+    total_posts_row = db_fetch_one(
+        "SELECT COUNT(*) as count FROM posts WHERE author_id = %s",
+        (user_id,)
+    )
+    total_posts = total_posts_row['count'] if total_posts_row else 0
+    total_pages = (total_posts + per_page - 1) // per_page
+    
+    if not posts:
+        text = "📝 *My Vent*\n\nYou haven't created any posts yet."
+        keyboard = [
+            [InlineKeyboardButton("✍️ Ask Question", callback_data='ask')],
+            [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
+        ]
+        
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.message.reply_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await update.message.reply_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        return
+    
+    # Build the posts list
+    posts_text = f"📝 *My Vent* (Page {page}/{total_pages})\n\n"
+    
+    for post in posts:
+        status = "✅ Approved" if post['approved'] else "⏳ Pending"
+        # Format timestamp
+        if isinstance(post['timestamp'], str):
+            timestamp = datetime.strptime(post['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%b %d, %H:%M')
+        else:
+            timestamp = post['timestamp'].strftime('%b %d, %H:%M')
+        
+        # Truncate long content for preview
+        preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
+        posts_text += f"📄 *{post['category']}* - {status}\n"
+        posts_text += f"🕒 {timestamp}\n"
+        posts_text += f"💬 {post['comment_count']} comments\n"
+        posts_text += f"📖 {preview}\n\n"
+        posts_text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
+    
+    # Build keyboard with pagination
+    keyboard_buttons = []
+    
+    # Pagination buttons
+    pagination_row = []
+    if page > 1:
+        pagination_row.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"myvent_page_{page-1}"))
+    if page < total_pages:
+        pagination_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"myvent_page_{page+1}"))
+    if pagination_row:
+        keyboard_buttons.append(pagination_row)
+    
+    # Action buttons
+    keyboard_buttons.extend([
+        [InlineKeyboardButton("✍️ Create New Post", callback_data='ask')],
+        [InlineKeyboardButton("👤 Back to Profile", callback_data='profile')],
+        [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
+    ])
+    
+    try:
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.message.reply_text(
+                posts_text,
+                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await update.message.reply_text(
+                posts_text,
+                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+                parse_mode=ParseMode.MARKDOWN
+            )
+    except Exception as e:
+        logger.error(f"Error showing my vent: {e}")
+        if hasattr(update, 'message') and update.message:
+            await update.message.reply_text("❌ Error loading your posts. Please try again.")
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -1446,9 +1541,18 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         "SELECT * FROM followers WHERE followed_id = %s",
         (user_id,)
     )
+    
+    # Get user's post count for the button text
+    user_posts = db_fetch_one(
+        "SELECT COUNT(*) as count FROM posts WHERE author_id = %s",
+        (user_id,)
+    )
+    post_count = user_posts['count'] if user_posts else 0
+    
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Set My Name", callback_data='edit_name')],
         [InlineKeyboardButton("⚧️ Set My Sex", callback_data='edit_sex')],
+        [InlineKeyboardButton(f"📝 My Vent ({post_count})", callback_data='my_vent')],
         [InlineKeyboardButton("📭 Inbox", callback_data='inbox')],
         [InlineKeyboardButton("⚙️ Settings", callback_data='settings')],
         [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
@@ -1465,7 +1569,8 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
             f"_Use /menu to return_"
         ),
         reply_markup=kb,
-        parse_mode=ParseMode.MARKDOWN)
+        parse_mode=ParseMode.MARKDOWN
+    )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1960,6 +2065,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except psycopg2.IntegrityError:
                 await query.message.reply_text("❌ User is already blocked.")
             
+        # My Vent functionality
+        elif query.data == 'my_vent':
+            await show_my_vent(update, context)
+            
+        elif query.data.startswith('myvent_page_'):
+            page = int(query.data.split('_')[-1])
+            await show_my_vent(update, context, page)
+            
     except Exception as e:
         logger.error(f"Error in button_handler: {e}")
         try:
@@ -2191,6 +2304,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "👤 View Profile":
         await send_updated_profile(user_id, update.message.chat.id, context)
         return 
+
+    elif text == "📝 My Vent":
+        await show_my_vent(update, context)
+        return
 
     elif text == "🏆 Leaderboard":
         await show_leaderboard(update, context)
