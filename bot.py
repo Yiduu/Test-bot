@@ -1304,7 +1304,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         
         rating = calculate_user_rating(commenter_id)
         stars = format_stars(rating)
-        profile_url = f"https://t.me/{BOT_USERNAME}?start=profile_{display_name}"
+        # REMOVED: profile_url to prevent link previews
 
         likes_row = db_fetch_one(
             "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'like'",
@@ -1327,7 +1327,8 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         dislike_emoji = "👎" if user_reaction and user_reaction['type'] == 'dislike' else "👎"
 
         comment_text = escape_markdown(comment['content'], version=2)
-        author_text = f"[{escape_markdown(display_name, version=2)}]({profile_url}) {display_sex} {stars}"
+        # CHANGED: Removed profile URL to prevent link previews
+        author_text = f"{escape_markdown(display_name, version=2)} {display_sex} {stars}"
 
         # NEW: Add edit and delete buttons for comment author
         kb_buttons = [
@@ -1352,7 +1353,8 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             text=f"{comment_text}\n\n{author_text}",
             reply_markup=kb,
             parse_mode=ParseMode.MARKDOWN_V2,
-            reply_to_message_id=header_message_id
+            reply_to_message_id=header_message_id,
+            disable_web_page_preview=True  # ADDED: Disable link previews
         )
 
         # Recursive function to display replies under this comment
@@ -1372,7 +1374,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 reply_display_sex = get_display_sex(reply_user)
                 rating_reply = calculate_user_rating(reply_user_id)
                 stars_reply = format_stars(rating_reply)
-                profile_url_reply = f"https://t.me/{BOT_USERNAME}?start=profile_{reply_display_name}"
+                # REMOVED: profile_url_reply to prevent link previews
                 safe_reply = escape_markdown(child['content'], version=2)
 
                 # NEW: Add edit and delete buttons for reply author
@@ -1396,10 +1398,11 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 # Send this reply under its parent message
                 child_msg = await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"{safe_reply}\n\n[{reply_display_name}]({profile_url_reply}) {reply_display_sex} {stars_reply}",
+                    text=f"{safe_reply}\n\n{reply_display_name} {reply_display_sex} {stars_reply}",
                     parse_mode=ParseMode.MARKDOWN_V2,
                     reply_to_message_id=parent_msg_id,
-                    reply_markup=reply_kb
+                    reply_markup=reply_kb,
+                    disable_web_page_preview=True  # ADDED: Disable link previews
                 )
 
                 # Recursively show this child's own replies
@@ -1420,7 +1423,8 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             chat_id=chat_id,
             text=f"📄 Page {page}/{total_pages}",
             reply_markup=pagination_markup,
-            reply_to_message_id=header_message_id
+            reply_to_message_id=header_message_id,
+            disable_web_page_preview=True  # ADDED: Disable link previews
         )
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1527,10 +1531,14 @@ async def show_my_vent(update: Update, context: ContextTypes.DEFAULT_TYPE, page=
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
     else:
-        text = f"📝 *My Vent* (Page {page}/{total_pages})\n\n"
+        # FIXED: Use proper markdown escaping for page numbers
+        text = f"📝 *My Vent* \\- Page {page}/{total_pages}\n\n"
         for post in posts:
             post_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
-            text += f"📄 *{post['category']}*:\n{escape_markdown(post_preview, version=2)}\n"
+            # FIXED: Properly escape category and post content
+            escaped_category = escape_markdown(post['category'], version=2)
+            escaped_preview = escape_markdown(post_preview, version=2)
+            text += f"📄 *{escaped_category}*:\n{escaped_preview}\n"
             text += f"💬 Comments: {count_all_comments(post['post_id'])}\n"
             text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
         
