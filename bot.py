@@ -1935,16 +1935,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await query.message.edit_text("❌ Edit time expired. Please start a new post.")
                     del context.user_data['pending_post']
                     return
-                    
+                
+                # Store the pending post data and set user state for editing
+                context.user_data['editing_post'] = True
+                
+                # Ask user to send the edited post
                 await query.message.edit_text(
-                    "✏️ Please edit your post:",
+                    "✏️ Please send your edited post:",
                     reply_markup=ForceReply(selective=True)
                 )
                 return
             
             elif query.data == 'cancel_post':
                 await query.message.edit_text("❌ Post cancelled.")
-                del context.user_data['pending_post']
+                if 'pending_post' in context.user_data:
+                    del context.user_data['pending_post']
+                if 'editing_post' in context.user_data:
+                    del context.user_data['editing_post']
                 return
             
             elif query.data == 'confirm_post':
@@ -1952,7 +1959,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 post_content = pending_post['content']
                 media_type = pending_post.get('media_type', 'text')
                 media_id = pending_post.get('media_id')
-                del context.user_data['pending_post']
+                
+                # Clean up the pending post data
+                if 'pending_post' in context.user_data:
+                    del context.user_data['pending_post']
+                if 'editing_post' in context.user_data:
+                    del context.user_data['editing_post']
                 
                 # Insert post
                 post_row = db_execute(
@@ -2147,7 +2159,55 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (user_id,))
 
-    if user and user['waiting_for_post']:
+    # Check if user is editing a pending post
+    if context.user_data.get('editing_post') and 'pending_post' in context.user_data:
+        pending_post = context.user_data['pending_post']
+        category = pending_post['category']
+        
+        # Handle different media types for edited posts
+        post_content = ""
+        media_type = pending_post.get('media_type', 'text')
+        media_id = pending_post.get('media_id')
+        
+        try:
+            if update.message.text:
+                post_content = update.message.text
+                media_type = 'text'
+                media_id = None
+            elif update.message.photo:
+                photo = update.message.photo[-1]
+                media_id = photo.file_id
+                media_type = 'photo'
+                post_content = update.message.caption or ""
+            elif update.message.voice:
+                voice = update.message.voice
+                media_id = voice.file_id
+                media_type = 'voice'
+                post_content = update.message.caption or ""
+            else:
+                post_content = "(Unsupported content type)"
+        except Exception as e:
+            logger.error(f"Error reading media in edit: {e}")
+            post_content = "(Unsupported content type)"
+
+        # Update the pending post with new content
+        context.user_data['pending_post'] = {
+            'content': post_content,
+            'category': category,
+            'media_type': media_type,
+            'media_id': media_id,
+            'timestamp': time.time()  # Reset timestamp for edit
+        }
+        
+        # Remove editing flag
+        del context.user_data['editing_post']
+        
+        # Show the updated confirmation
+        await send_post_confirmation(update, context, post_content, category, media_type, media_id)
+        return
+
+    # Existing code for new posts...
+    elif user and user['waiting_for_post']:
         category = user['selected_category']
         db_execute(
             "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
