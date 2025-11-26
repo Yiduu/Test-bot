@@ -1293,7 +1293,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         
         rating = calculate_user_rating(commenter_id)
         stars = format_stars(rating)
-        # Remove the profile_url since we're already linking the display_name
 
         likes_row = db_fetch_one(
             "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'like'",
@@ -1316,8 +1315,8 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         dislike_emoji = "👎" if user_reaction and user_reaction['type'] == 'dislike' else "👎"
 
         comment_text = escape_markdown(comment['content'], version=2)
-        # FIXED: Remove the redundant profile URL display, just show the linked name + sex + stars
-        author_text = f"[{escape_markdown(display_name, version=2)}](https://t.me/{BOT_USERNAME}?start=profile_{display_name}) {display_sex} {stars}"
+        # FIXED: Use HTML formatting to hide the URL
+        author_text = f'<a href="https://t.me/{BOT_USERNAME}?start=profile_{display_name}">{escape_markdown(display_name, version=2)}</a> {display_sex} {stars}'
 
         kb = InlineKeyboardMarkup([
             [
@@ -1331,7 +1330,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             chat_id=chat_id,
             text=f"{comment_text}\n\n{author_text}",
             reply_markup=kb,
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.HTML,  # CHANGED: Use HTML instead of MARKDOWN_V2
             reply_to_message_id=header_message_id
         )
 
@@ -1352,7 +1351,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 reply_display_sex = get_display_sex(reply_user)
                 rating_reply = calculate_user_rating(reply_user_id)
                 stars_reply = format_stars(rating_reply)
-                # Remove the profile_url_reply for replies too
                 safe_reply = escape_markdown(child['content'], version=2)
 
                 reply_kb = InlineKeyboardMarkup([
@@ -1363,12 +1361,12 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                     ]
                 ])
 
-                # Send this reply under its parent message - FIXED: Remove redundant URL
-                reply_author_text = f"[{escape_markdown(reply_display_name, version=2)}](https://t.me/{BOT_USERNAME}?start=profile_{reply_display_name}) {reply_display_sex} {stars_reply}"
+                # Send this reply under its parent message - FIXED: Use HTML formatting
+                reply_author_text = f'<a href="https://t.me/{BOT_USERNAME}?start=profile_{reply_display_name}">{escape_markdown(reply_display_name, version=2)}</a> {reply_display_sex} {stars_reply}'
                 child_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text=f"{safe_reply}\n\n{reply_author_text}",
-                    parse_mode=ParseMode.MARKDOWN_V2,
+                    parse_mode=ParseMode.HTML,  # CHANGED: Use HTML instead of MARKDOWN_V2
                     reply_to_message_id=parent_msg_id,
                     reply_markup=reply_kb
                 )
