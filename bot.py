@@ -1,4 +1,3 @@
-
 import os 
 import logging
 import psycopg2
@@ -1050,7 +1049,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🌟✝️ *እንኳን ወደ Christian vent በሰላም መጡ* ✝️🌟\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "ማንነታችሁ ሳይገለጽ ሃሳባችሁን ማጋራት ትችላላችሁ.\n\n የሚከተሉትን ምረጡ :",
+        "ማንነታችሁ ሳይገለጽ ሃሳባችሁን ማጋራት ትችላላችሁ.\n\n የሚከተሉትን ምረጁ :",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.MARKDOWN)
     
@@ -1263,21 +1262,19 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
     total_comments = count_all_comments(post_id)
     total_pages = (total_comments + per_page - 1) // per_page
 
-    post_text = post['content']
-    header = f"{escape_markdown(post_text, version=2)}\n\n"
-
     if not comments and page == 1:
         await context.bot.send_message(
             chat_id=chat_id,
-            text=header + "\\_No comments yet.\\_",
+            text="💬 *Comments* \\_No comments yet.\\_",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=main_menu
         )
         return
 
+    # Send comments header without post content
     header_msg = await context.bot.send_message(
         chat_id=chat_id,
-        text=header,
+        text=f"💬 *Comments* (Page {page}/{total_pages})",
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=main_menu
     )
@@ -1380,12 +1377,15 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         # Start recursion for this top-level comment
         await send_replies_recursive(comment['comment_id'], msg.message_id, depth=1)
 
-
     pagination_buttons = []
     if page > 1:
         pagination_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"viewcomments_{post_id}_{page-1}"))
     if page < total_pages:
         pagination_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"viewcomments_{post_id}_{page+1}"))
+    
+    # Add "Write Comment" button
+    pagination_buttons.append(InlineKeyboardButton("✍️ Write Comment", callback_data=f"writecomment_{post_id}"))
+    
     if pagination_buttons:
         pagination_markup = InlineKeyboardMarkup([pagination_buttons])
         await context.bot.send_message(
