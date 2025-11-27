@@ -1328,7 +1328,13 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
 
         comment_text = escape_markdown(comment['content'], version=2)
         # CHANGED: Removed profile URL to prevent link previews
-        author_text = f"{escape_markdown(display_name, version=2)} {display_sex} {stars}"
+        profile_link = f"https://t.me/{BOT_USERNAME}?start=profile_{display_name}"
+
+        author_text = (
+            f"[{escape_markdown(display_name, version=2)}]({profile_link}) "
+            f"{display_sex} {stars}"
+        )
+
 
         # NEW: Add edit and delete buttons for comment author
         kb_buttons = [
