@@ -1000,8 +1000,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 return
-
-       elif arg.startswith("profile_"):
+        
+        elif arg.startswith("profile_"):
            from urllib.parse import unquote
            encoded = arg.split("_", 1)[1]
            target_name = unquote(encoded)
