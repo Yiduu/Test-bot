@@ -1,6 +1,7 @@
 import os 
 import logging
 import psycopg2
+from urllib.parse import quote
 from psycopg2 import sql, IntegrityError, ProgrammingError
 from psycopg2.extras import RealDictCursor
 from pathlib import Path
@@ -1000,8 +1001,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        elif arg.startswith("profile_"):
-            target_name = arg.split("_", 1)[1]
+       elif arg.startswith("profile_"):
+            from urllib.parse import unquote
+            encoded = arg.split("_", 1)[1]
+            target_name = unquote(encoded)
+
             user_data = db_fetch_one("SELECT * FROM users WHERE anonymous_name = %s", (target_name,))
             if user_data:
                 followers = db_fetch_all(
@@ -1328,7 +1332,9 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
 
         comment_text = escape_markdown(comment['content'], version=2)
         # CHANGED: Removed profile URL to prevent link previews
-        profile_link = f"https://t.me/{BOT_USERNAME}?start=profile_{display_name}"
+        encoded_name = quote(display_name, safe="")
+        profile_link = f"https://t.me/{BOT_USERNAME}?start=profile_{encoded_name}"
+
 
         author_text = (
             f"[{escape_markdown(display_name, version=2)}]({profile_link}) "
