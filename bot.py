@@ -1002,9 +1002,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
        elif arg.startswith("profile_"):
-            from urllib.parse import unquote
-            encoded = arg.split("_", 1)[1]
-            target_name = unquote(encoded)
+           from urllib.parse import unquote
+           encoded = arg.split("_", 1)[1]
+           target_name = unquote(encoded)
 
             user_data = db_fetch_one("SELECT * FROM users WHERE anonymous_name = %s", (target_name,))
             if user_data:
