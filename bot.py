@@ -1002,32 +1002,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
         
         elif arg.startswith("profile_"):
-           from urllib.parse import unquote
-           encoded = arg.split("_", 1)[1]
-           target_name = unquote(encoded)
-
-            user_data = db_fetch_one("SELECT * FROM users WHERE anonymous_name = %s", (target_name,))
+            from urllib.parse import unquote
+        
+            encoded = arg.split("_", 1)[1]
+            target_name = unquote(encoded)
+        
+            user_data = db_fetch_one(
+                "SELECT * FROM users WHERE anonymous_name = %s",
+                (target_name,)
+            )
+        
             if user_data:
                 followers = db_fetch_all(
                     "SELECT * FROM followers WHERE followed_id = %s",
                     (user_data['user_id'],)
                 )
+        
                 rating = calculate_user_rating(user_data['user_id'])
                 stars = format_stars(rating)
                 current = user_id
                 btn = []
+        
+                # Follow / Unfollow buttons
                 if user_data['user_id'] != current:
                     is_following = db_fetch_one(
                         "SELECT * FROM followers WHERE follower_id = %s AND followed_id = %s",
                         (current, user_data['user_id'])
                     )
+        
                     if is_following:
-                        btn.append([InlineKeyboardButton("🚫 Unfollow", callback_data=f'unfollow_{user_data["user_id"]}')])
-                        btn.append([InlineKeyboardButton("✉️ Send Message", callback_data=f'message_{user_data["user_id"]}')])
+                        btn.append([
+                            InlineKeyboardButton(
+                                "🚫 Unfollow",
+                                callback_data=f'unfollow_{user_data["user_id"]}'
+                            )
+                        ])
+                        btn.append([
+                            InlineKeyboardButton(
+                                "✉️ Send Message",
+                                callback_data=f'message_{user_data["user_id"]}'
+                            )
+                        ])
                     else:
-                        btn.append([InlineKeyboardButton("🫂 Follow", callback_data=f'follow_{user_data["user_id"]}')])
+                        btn.append([
+                            InlineKeyboardButton(
+                                "🫂 Follow",
+                                callback_data=f'follow_{user_data["user_id"]}'
+                            )
+                        ])
+        
                 display_name = get_display_name(user_data)
                 display_sex = get_display_sex(user_data)
+        
                 await update.message.reply_text(
                     f"👤 *{display_name}* 🎖 \n"
                     f"📌 Sex: {display_sex}\n\n"
@@ -1037,39 +1063,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
                     f"_Use /menu to return_",
                     reply_markup=InlineKeyboardMarkup(btn) if btn else None,
-                    parse_mode=ParseMode.MARKDOWN)
+                    parse_mode=ParseMode.MARKDOWN
+                )
                 return
-                
+        
         elif arg == "inbox":
             await show_inbox(update, context)
             return
-
-    keyboard = [
-        [
-            InlineKeyboardButton("✍️ Ask Question 🙏", callback_data='ask'),
-            InlineKeyboardButton("👤 View Profile 🎖", callback_data='profile')
-        ],
-        [
-            InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard'),
-            InlineKeyboardButton("⚙️ Settings", callback_data='settings')
-        ],
-        [
-            InlineKeyboardButton("❓ Help", callback_data='help'),
-            InlineKeyboardButton("ℹ️ About Us", callback_data='about')
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("✍️ Ask Question 🙏", callback_data='ask'),
+                InlineKeyboardButton("👤 View Profile 🎖", callback_data='profile')
+            ],
+            [
+                InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard'),
+                InlineKeyboardButton("⚙️ Settings", callback_data='settings')
+            ],
+            [
+                InlineKeyboardButton("❓ Help", callback_data='help'),
+                InlineKeyboardButton("ℹ️ About Us", callback_data='about')
+            ]
         ]
-    ]
-
-    await update.message.reply_text(
-        "🌟✝️ *እንኳን ወደ Christian vent በሰላም መጡ* ✝️🌟\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "ማንነታችሁ ሳይገለጽ ሃሳባችሁን ማጋራት ትችላላችሁ.\n\n የሚከተሉትን ምረጁ :",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.MARKDOWN)
-    
-    await update.message.reply_text(
-        "You can use the buttons below to navigate:",
-        reply_markup=main_menu
-    )
+        
+        await update.message.reply_text(
+            "🌟✝️ *እንኳን ወደ Christian vent በሰላም መጡ* ✝️🌟\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "ማንነታችሁ ሳይገለጽ ሃሳባችሁን ማጋራት ትችላላችሁ.\n\n የሚከተሉትን ምረጁ :",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        await update.message.reply_text(
+            "You can use the buttons below to navigate:",
+            reply_markup=main_menu
+        )
 
 async def show_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
