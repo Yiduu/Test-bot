@@ -814,12 +814,13 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         return
     
     try:
-        # Format the post content for the channel - REMOVED LINKS
+        # Format the post content for the channel
         hashtag = f"#{post['category']}"
         caption_text = (
             f"{post['content']}\n\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"{hashtag}"
+            f"{hashtag}\n"
+            f"[Telegram](https://t.me/christianvent)| [Bot](https://t.me/{BOT_USERNAME})"
         )
         
         # Create the comments button
@@ -1632,7 +1633,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         reply_markup=kb,
         parse_mode=ParseMode.MARKDOWN)
 
-# UPDATED: Function to show user's previous posts with IMPROVED CLEAN UI
+# UPDATED: Function to show user's previous posts with new clean UI
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
@@ -1658,67 +1659,81 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("🌟 Share My Thoughts", callback_data='ask')],
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
-    else:
-        # IMPROVED CLEAN UI DESIGN - Each post as a separate card with buttons directly under
-        text = f"📚 *My Previous Posts*\n\n"
         
-        for post in posts:
-            # Create snippet (100-150 characters)
-            snippet = post['content'][:140]
-            if len(post['content']) > 140:
-                snippet += '...'
-            
-            # Escape markdown for snippet
-            escaped_snippet = escape_markdown(snippet, version=2)
-            escaped_category = escape_markdown(post['category'], version=2)
-            
-            # Post card design with clean formatting
-            text += f"📝 *Your Post [{escaped_category}]:*\n"
-            text += f"❝ {escaped_snippet} ❞\n\n"
-            
-            # Add spacing between post cards
-            text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            else:
+                if hasattr(update, 'message') and update.message:
+                    await update.message.reply_text(
+                        text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+        except Exception as e:
+            logger.error(f"Error showing empty previous posts: {e}")
+            if hasattr(update, 'message') and update.message:
+                await update.message.reply_text("❌ Error loading your posts. Please try again.")
+        return
     
-    # Build keyboard with NEW STRUCTURE - buttons directly under each post
+    # NEW: Build clean UI with post cards
+    text = f"📚 *My Previous Posts*\n\n"
+    text += f"*Page {page} of {total_pages}*\n\n"
+    
     keyboard = []
     
-    # Add action buttons for each post - DIRECTLY UNDER EACH POST
-    for post in posts:
-        # Create snippet for callback data reference
-        snippet = post['content'][:140] + '...' if len(post['content']) > 140 else post['content']
+    for idx, post in enumerate(posts):
+        # Create snippet (100-150 characters)
+        snippet = post['content']
+        if len(snippet) > 150:
+            snippet = snippet[:147] + "..."
+        elif len(snippet) > 100:
+            snippet = snippet[:100] + "..."
         
-        # Add the three buttons for this specific post
-        post_buttons = [
+        # Add post card with clean formatting
+        escaped_snippet = escape_markdown(snippet, version=2)
+        escaped_category = escape_markdown(post['category'], version=2)
+        
+        text += f"📝 *Your Post \\[{escaped_category}\\]:*\n"
+        text += f"❝ {escaped_snippet} ❞\n\n"
+        
+        # Add action buttons for this post
+        comment_count = count_all_comments(post['post_id'])
+        keyboard.append([
             InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
-            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
+            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}")
+        ])
+        keyboard.append([
             InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
-        ]
-        keyboard.append(post_buttons)
+        ])
+        
+        # Add spacing between post cards (except after last post)
+        if idx < len(posts) - 1:
+            text += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
     
-    # Add pagination with beautiful design
-    if total_pages > 1:
-        pagination_row = []
-        
-        # Previous page button (disabled if on first page)
-        if page > 1:
-            pagination_row.append(InlineKeyboardButton("⬅️ Previous Page", callback_data=f"previous_posts_{page-1}"))
-        else:
-            # Disabled state for first page
-            pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
-        
-        # Current page indicator (centered, non-clickable)
-        pagination_row.append(InlineKeyboardButton(f"Page {page}/{total_pages}", callback_data="noop"))
-        
-        # Next page button (disabled if on last page)
-        if page < total_pages:
-            pagination_row.append(InlineKeyboardButton("Next Page ➡️", callback_data=f"previous_posts_{page+1}"))
-        else:
-            # Disabled state for last page
-            pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
-        
-        keyboard.append(pagination_row)
+    # NEW: Beautiful pagination
+    pagination_buttons = []
     
-    # Add main menu button
+    # Previous page button (disabled on first page)
+    if page > 1:
+        pagination_buttons.append(InlineKeyboardButton("⬅️ Previous Page", callback_data=f"previous_posts_{page-1}"))
+    else:
+        pagination_buttons.append(InlineKeyboardButton("❌ Previous Page", callback_data="noop"))
+    
+    # Page indicator (non-clickable)
+    pagination_buttons.append(InlineKeyboardButton(f"• {page}/{total_pages} •", callback_data="noop"))
+    
+    # Next page button (disabled on last page)
+    if page < total_pages:
+        pagination_buttons.append(InlineKeyboardButton("Next Page ➡️", callback_data=f"previous_posts_{page+1}"))
+    else:
+        pagination_buttons.append(InlineKeyboardButton("❌ Next Page", callback_data="noop"))
+    
+    keyboard.append(pagination_buttons)
     keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
     
     try:
@@ -1750,6 +1765,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(query.from_user.id)
 
     try:
+        # NEW: Handle noop (disabled buttons)
+        if query.data == 'noop':
+            await query.answer("This button is disabled", show_alert=False)
+            return
+
         if query.data == 'ask':
             await query.message.reply_text(
                 "📚 *Choose a category:*",
