@@ -1126,7 +1126,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 "🫂 Follow",
                                 callback_data=f'follow_{user_data["user_id"]}'
                             )
-                        ]
+                        ])
                 author_display = format_user_with_aura(user_data['user_id'])
                 
                 await update.message.reply_text(
