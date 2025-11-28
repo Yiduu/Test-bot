@@ -1633,7 +1633,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         reply_markup=kb,
         parse_mode=ParseMode.MARKDOWN)
 
-# UPDATED: Function to show user's previous posts with new clean UI
+# UPDATED: Function to show user's previous posts with new clean UI and buttons directly under each post
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
@@ -1680,7 +1680,7 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text("❌ Error loading your posts. Please try again.")
         return
     
-    # NEW: Build clean UI with post cards
+    # NEW: Build clean UI with post cards and buttons directly under each
     text = f"📚 *My Previous Posts*\n\n"
     text += f"*Page {page} of {total_pages}*\n\n"
     
@@ -1701,19 +1701,16 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         text += f"📝 *Your Post \\[{escaped_category}\\]:*\n"
         text += f"❝ {escaped_snippet} ❞\n\n"
         
-        # Add action buttons for this post
-        comment_count = count_all_comments(post['post_id'])
+        # Add action buttons for this post directly under the snippet
         keyboard.append([
             InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
-            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}")
-        ])
-        keyboard.append([
+            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
             InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
         ])
         
-        # Add spacing between post cards (except after last post)
+        # Add spacing between post cards (empty line) except after last post
         if idx < len(posts) - 1:
-            text += "\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\\-\n\n"
+            text += "\n"
     
     # NEW: Beautiful pagination
     pagination_buttons = []
