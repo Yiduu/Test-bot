@@ -1633,7 +1633,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         reply_markup=kb,
         parse_mode=ParseMode.MARKDOWN)
 
-# UPDATED: Function to show user's previous posts (renamed from show_my_vent)
+# UPDATED: Function to show user's previous posts with NEW CLEAN UI
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
@@ -1660,40 +1660,67 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
     else:
-        # FIXED: Use proper markdown escaping for page numbers
-        text = f"📚 *My Previous Posts* \\- Page {page}/{total_pages}\n\n"
+        # NEW CLEAN UI DESIGN
+        text = f"📚 *My Previous Posts*\n\n"
+        
         for post in posts:
-            post_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
-            # FIXED: Properly escape category and post content
+            # Create snippet (100-150 characters)
+            snippet = post['content'][:140]
+            if len(post['content']) > 140:
+                snippet += '...'
+            
+            # Escape markdown for snippet
+            escaped_snippet = escape_markdown(snippet, version=2)
             escaped_category = escape_markdown(post['category'], version=2)
-            escaped_preview = escape_markdown(post_preview, version=2)
-            text += f"📄 *{escaped_category}*:\n{escaped_preview}\n"
-            text += f"💬 Comments: {count_all_comments(post['post_id'])}\n"
-            text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            
+            # Post card design with clean formatting
+            text += f"📝 *Your Post [{escaped_category}]:*\n"
+            text += f"❝ {escaped_snippet} ❞\n\n"
+            
+            # Add spacing between post cards
+            text += "\\-\n\n"
         
-        keyboard = []
-        
-        # Pagination buttons
+        # Remove the last separator if it exists
+        if text.endswith("\\-\n\n"):
+            text = text[:-4]
+    
+    # Build keyboard with new button layout
+    keyboard = []
+    
+    # Add action buttons for each post - NEW CLEAN LAYOUT
+    for post in posts:
+        post_buttons = [
+            InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
+            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
+            InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
+        ]
+        keyboard.append(post_buttons)
+    
+    # Add pagination with beautiful design
+    if total_pages > 1:
         pagination_row = []
+        
+        # Previous page button (disabled if on first page)
         if page > 1:
-            pagination_row.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"previous_posts_{page-1}"))
+            pagination_row.append(InlineKeyboardButton("⬅️ Previous Page", callback_data=f"previous_posts_{page-1}"))
+        else:
+            # Disabled state for first page
+            pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
+        
+        # Current page indicator (centered, non-clickable)
+        pagination_row.append(InlineKeyboardButton(f"Page {page}/{total_pages}", callback_data="noop"))
+        
+        # Next page button (disabled if on last page)
         if page < total_pages:
-            pagination_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"previous_posts_{page+1}"))
-        if pagination_row:
-            keyboard.append(pagination_row)
+            pagination_row.append(InlineKeyboardButton("Next Page ➡️", callback_data=f"previous_posts_{page+1}"))
+        else:
+            # Disabled state for last page
+            pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
         
-        # Action buttons for each post - NOW WITH DELETE BUTTON
-        for post in posts:
-            keyboard.append([
-                InlineKeyboardButton(f"💬 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
-                InlineKeyboardButton(f"➕ Continue This Post", callback_data=f"continue_post_{post['post_id']}")
-            ])
-            # ADDED: Delete post button
-            keyboard.append([
-                InlineKeyboardButton(f"🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
-            ])
-        
-        keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
+        keyboard.append(pagination_row)
+    
+    # Add main menu button
+    keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
     
     try:
         if hasattr(update, 'callback_query') and update.callback_query:
