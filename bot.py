@@ -479,10 +479,13 @@ async def send_post_confirmation(update: Update, context: ContextTypes.DEFAULT_T
     
     thread_text = ""
     if thread_from_post_id:
-        thread_post = db_fetch_one("SELECT content FROM posts WHERE post_id = %s", (thread_from_post_id,))
+        thread_post = db_fetch_one("SELECT content, channel_message_id FROM posts WHERE post_id = %s", (thread_from_post_id,))
         if thread_post:
             thread_preview = thread_post['content'][:100] + '...' if len(thread_post['content']) > 100 else thread_post['content']
-            thread_text = f"🔄 *Threading from previous post:*\n{escape_markdown(thread_preview, version=2)}\n\n"
+            if thread_post['channel_message_id']:
+                thread_text = f"🔄 *Thread continuation from your previous post:*\n{escape_markdown(thread_preview, version=2)}\n\n"
+            else:
+                thread_text = f"🔄 *Threading from previous post:*\n{escape_markdown(thread_preview, version=2)}\n\n"
     
     preview_text = (
         f"{thread_text}📝 *Post Preview* [{category}]\n\n"
@@ -825,13 +828,25 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
             [InlineKeyboardButton(f"💬 Comments (0)", url=f"https://t.me/{BOT_USERNAME}?start=comments_{post_id}")]
         ])
         
+        # Check if this is a thread continuation
+        reply_to_message_id = None
+        if post['thread_from_post_id']:
+            # Get the original post's channel message ID
+            original_post = db_fetch_one(
+                "SELECT channel_message_id FROM posts WHERE post_id = %s", 
+                (post['thread_from_post_id'],)
+            )
+            if original_post and original_post['channel_message_id']:
+                reply_to_message_id = original_post['channel_message_id']
+        
         # Send post to channel based on media type
         if post['media_type'] == 'text':
             msg = await context.bot.send_message(
                 chat_id=CHANNEL_ID,
                 text=caption_text,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=kb
+                reply_markup=kb,
+                reply_to_message_id=reply_to_message_id
             )
         elif post['media_type'] == 'photo':
             msg = await context.bot.send_photo(
@@ -839,7 +854,8 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
                 photo=post['media_id'],
                 caption=caption_text,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=kb
+                reply_markup=kb,
+                reply_to_message_id=reply_to_message_id
             )
         elif post['media_type'] == 'voice':
             msg = await context.bot.send_voice(
@@ -847,7 +863,8 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
                 voice=post['media_id'],
                 caption=caption_text,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=kb
+                reply_markup=kb,
+                reply_to_message_id=reply_to_message_id
             )
         else:
             await query.answer("❌ Unsupported media type.", show_alert=True)
@@ -1665,11 +1682,15 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         if pagination_row:
             keyboard.append(pagination_row)
         
-        # Action buttons for each post
+        # Action buttons for each post - NOW WITH DELETE BUTTON
         for post in posts:
             keyboard.append([
                 InlineKeyboardButton(f"💬 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
                 InlineKeyboardButton(f"➕ Continue This Post", callback_data=f"continue_post_{post['post_id']}")
+            ])
+            # ADDED: Delete post button
+            keyboard.append([
+                InlineKeyboardButton(f"🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
             ])
         
         keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
@@ -2071,6 +2092,79 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update_channel_post_comment_count(context, post_id)
             else:
                 await query.answer("❌ You can only delete your own comments", show_alert=True)
+
+        # NEW: Handle delete post
+        elif query.data.startswith("delete_post_"):
+            post_id = int(query.data.split('_')[2])
+            post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
+            
+            if post and post['author_id'] == user_id:
+                # Ask for confirmation
+                keyboard = InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("✅ Yes, Delete", callback_data=f"confirm_delete_post_{post_id}"),
+                        InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_delete_post_{post_id}")
+                    ]
+                ])
+                
+                await query.message.edit_text(
+                    "🗑 *Delete Post*\n\nAre you sure you want to delete this post? This action cannot be undone.",
+                    reply_markup=keyboard,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            else:
+                await query.answer("❌ You can only delete your own posts", show_alert=True)
+
+        # NEW: Handle confirm delete post
+        elif query.data.startswith("confirm_delete_post_"):
+            post_id = int(query.data.split('_')[3])
+            post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
+            
+            if post and post['author_id'] == user_id:
+                try:
+                    # Delete channel message if published
+                    if post['channel_message_id']:
+                        try:
+                            await context.bot.delete_message(
+                                chat_id=CHANNEL_ID,
+                                message_id=post['channel_message_id']
+                            )
+                        except Exception as e:
+                            logger.error(f"Error deleting channel message: {e}")
+                            # Continue with deletion even if channel message deletion fails
+                    
+                    # Delete all comments and reactions for this post
+                    # First get all comment IDs for this post
+                    comments = db_fetch_all("SELECT comment_id FROM comments WHERE post_id = %s", (post_id,))
+                    for comment in comments:
+                        db_execute("DELETE FROM reactions WHERE comment_id = %s", (comment['comment_id'],))
+                    
+                    # Delete all comments
+                    db_execute("DELETE FROM comments WHERE post_id = %s", (post_id,))
+                    
+                    # Delete the post
+                    db_execute("DELETE FROM posts WHERE post_id = %s", (post_id,))
+                    
+                    await query.answer("✅ Post deleted successfully")
+                    await query.message.edit_text(
+                        "✅ Post has been deleted successfully.",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                    
+                    # Refresh the previous posts list
+                    await show_previous_posts(update, context, 1)
+                    
+                except Exception as e:
+                    logger.error(f"Error deleting post: {e}")
+                    await query.answer("❌ Error deleting post", show_alert=True)
+            else:
+                await query.answer("❌ You can only delete your own posts", show_alert=True)
+
+        # NEW: Handle cancel delete post
+        elif query.data.startswith("cancel_delete_post_"):
+            post_id = int(query.data.split('_')[3])
+            # Just go back to the previous posts list
+            await show_previous_posts(update, context, 1)
                 
         elif query.data.startswith("reply_"):
             parts = query.data.split("_")
