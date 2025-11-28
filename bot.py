@@ -35,6 +35,19 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
 BOT_USERNAME = os.getenv('BOT_USERNAME')
 ADMIN_ID = os.getenv('ADMIN_ID')
 
+# Aura Points Configuration
+AURA_POINTS = {
+    'create_post': 10,
+    'receive_like': 3,
+    'receive_dislike': -2,
+    'create_comment': 5,
+    'comment_receive_like': 2,
+    'comment_receive_dislike': -1,
+    'post_continuation': 8,
+    'post_deleted': -15,
+    'spam_detection': -10
+}
+
 # Initialize database tables with schema migration
 def init_db():
     try:
@@ -59,7 +72,8 @@ def init_db():
                     privacy_public BOOLEAN DEFAULT TRUE,
                     is_admin BOOLEAN DEFAULT FALSE,
                     waiting_for_private_message BOOLEAN DEFAULT FALSE,
-                    private_message_target TEXT
+                    private_message_target TEXT,
+                    aura_points INTEGER DEFAULT 0
                 )
                 ''')
 
@@ -190,6 +204,46 @@ def db_fetch_one(query, params=()):
 
 def db_fetch_all(query, params=()):
     return db_execute(query, params, fetch=True)
+
+# Aura Points System Functions
+def update_aura_points(user_id: str, points: int, action_type: str = None):
+    """Update user's aura points and log the action."""
+    try:
+        # Update the user's aura points
+        success = db_execute(
+            "UPDATE users SET aura_points = aura_points + %s WHERE user_id = %s",
+            (points, user_id)
+        )
+        
+        if success and action_type:
+            logging.info(f"Aura points updated: {user_id} {points} points for {action_type}")
+        
+        return success
+    except Exception as e:
+        logging.error(f"Error updating aura points for {user_id}: {e}")
+        return False
+
+def format_user_with_aura(user_id: str) -> str:
+    """Format username with aura points in italic and zigzag separator."""
+    user = db_fetch_one(
+        "SELECT anonymous_name, aura_points FROM users WHERE user_id = %s",
+        (user_id,)
+    )
+    
+    if user:
+        username = user['anonymous_name'] or "Anonymous"
+        aura_points = user['aura_points'] or 0
+        # Use italic and zigzag separator (⚡)
+        return f"*{escape_markdown(username, version=2)}* ⚡ {aura_points}"
+    return "*Anonymous* ⚡ 0"
+
+def get_user_aura_points(user_id: str) -> int:
+    """Get user's current aura points."""
+    user = db_fetch_one(
+        "SELECT aura_points FROM users WHERE user_id = %s",
+        (user_id,)
+    )
+    return user['aura_points'] if user else 0
 
 # Categories
 CATEGORIES = [
@@ -350,31 +404,31 @@ async def update_channel_post_comment_count(context: ContextTypes.DEFAULT_TYPE, 
 
 async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top_users = db_fetch_all('''
-        SELECT user_id, anonymous_name, sex,
+        SELECT user_id, anonymous_name, sex, aura_points,
                (SELECT COUNT(*) FROM posts WHERE author_id = users.user_id AND approved = TRUE) + 
                (SELECT COUNT(*) FROM comments WHERE author_id = users.user_id) AS total
         FROM users
-        ORDER BY total DESC
+        ORDER BY aura_points DESC, total DESC
         LIMIT 10
     ''')
     
     leaderboard_text = "🏆 *Top Contributors* 🏆\n\n"
     for idx, user in enumerate(top_users, start=1):
         stars = format_stars(user['total'] // 5)
-        leaderboard_text += (
-            f"{idx}. {user['anonymous_name']} {user['sex']} - {user['total']} contributions {stars}\n"
-        )
+        aura_display = format_user_with_aura(user['user_id'])
+        leaderboard_text += f"{idx}. {aura_display} - {user['total']} contributions {stars}\n"
     
     user_id = str(update.effective_user.id)
     user_rank = get_user_rank(user_id)
     
     if user_rank and user_rank > 10:
-        user_data = db_fetch_one("SELECT anonymous_name, sex FROM users WHERE user_id = %s", (user_id,))
+        user_data = db_fetch_one("SELECT anonymous_name, sex, aura_points FROM users WHERE user_id = %s", (user_id,))
         if user_data:
             user_contributions = calculate_user_rating(user_id)
+            aura_display = format_user_with_aura(user_id)
             leaderboard_text += (
                 f"\n...\n"
-                f"{user_rank}. {user_data['anonymous_name']} {user_data['sex']} - {user_contributions} contributions\n"
+                f"{user_rank}. {aura_display} - {user_contributions} contributions\n"
             )
     
     keyboard = [
@@ -406,7 +460,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
     try:
-        user = db_fetch_one("SELECT notifications_enabled, privacy_public, is_admin FROM users WHERE user_id = %s", (user_id,))
+        user = db_fetch_one("SELECT notifications_enabled, privacy_public, is_admin, aura_points FROM users WHERE user_id = %s", (user_id,))
         
         if not user:
             if update.message:
@@ -439,22 +493,24 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
+        aura_display = format_user_with_aura(user_id)
+        
         if update.callback_query:
             try:
                 await update.callback_query.edit_message_text(
-                    "⚙️ *Settings Menu*",
+                    f"⚙️ *Settings Menu*\n\n{aura_display}",
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
             except BadRequest:
                 await update.callback_query.message.reply_text(
-                    "⚙️ *Settings Menu*",
+                    f"⚙️ *Settings Menu*\n\n{aura_display}",
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
         else:
             await update.message.reply_text(
-                "⚙️ *Settings Menu*",
+                f"⚙️ *Settings Menu*\n\n{aura_display}",
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -554,7 +610,7 @@ async def notify_user_of_reply(context: ContextTypes.DEFAULT_TYPE, post_id: int,
             return
         
         replier = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (replier_id,))
-        replier_name = get_display_name(replier)
+        replier_name = format_user_with_aura(replier_id)
         
         post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
         post_preview = post['content'][:50] + '...' if len(post['content']) > 50 else post['content']
@@ -583,7 +639,7 @@ async def notify_admin_of_new_post(context: ContextTypes.DEFAULT_TYPE, post_id: 
         return
     
     author = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (post['author_id'],))
-    author_name = get_display_name(author)
+    author_name = format_user_with_aura(post['author_id'])
     
     post_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
     
@@ -598,7 +654,8 @@ async def notify_admin_of_new_post(context: ContextTypes.DEFAULT_TYPE, post_id: 
         await context.bot.send_message(
             chat_id=ADMIN_ID,
             text=f"🆕 New post awaiting approval from {author_name}:\n\n{post_preview}",
-            reply_markup=keyboard
+            reply_markup=keyboard,
+            parse_mode=ParseMode.MARKDOWN
         )
     except Exception as e:
         logger.error(f"Error notifying admin: {e}")
@@ -618,14 +675,14 @@ async def notify_user_of_private_message(context: ContextTypes.DEFAULT_TYPE, sen
             return
         
         sender = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (sender_id,))
-        sender_name = get_display_name(sender)
+        sender_name = format_user_with_aura(sender_id)
         
         # Truncate long messages for the notification
         preview_content = message_content[:100] + '...' if len(message_content) > 100 else message_content
         
         notification_text = (
             f"📩 *New Private Message*\n\n"
-            f"👤 From: {escape_markdown(sender_name, version=2)}\n\n"
+            f"👤 From: {sender_name}\n\n"
             f"💬 {escape_markdown(preview_content, version=2)}\n\n"
             f"💭 _Use /inbox to view all messages_"
         )
@@ -641,7 +698,7 @@ async def notify_user_of_private_message(context: ContextTypes.DEFAULT_TYPE, sen
         await context.bot.send_message(
             chat_id=receiver_id,
             text=notification_text,
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=keyboard
         )
     except Exception as e:
@@ -702,7 +759,7 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Get pending posts
     posts = db_fetch_all("""
-        SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id
+        SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id, p.author_id
         FROM posts p
         JOIN users u ON p.author_id = u.user_id
         WHERE p.approved = FALSE
@@ -726,7 +783,8 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ])
         
         preview = post['content'][:200] + '...' if len(post['content']) > 200 else post['content']
-        text = f"📝 *Pending Post* [{post['category']}]\n\n{preview}\n\n👤 {post['anonymous_name']}"
+        author_display = format_user_with_aura(post['author_id'])
+        text = f"📝 *Pending Post* [{post['category']}]\n\n{preview}\n\n👤 {author_display}"
         
         try:
             if post['media_type'] == 'text':
@@ -877,6 +935,14 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
             await query.answer("❌ Failed to update database.", show_alert=True)
             return
         
+        # Award aura points for post creation
+        if post['thread_from_post_id']:
+            # Award points for post continuation
+            update_aura_points(post['author_id'], AURA_POINTS['post_continuation'], 'post_continuation')
+        else:
+            # Award points for regular post creation
+            update_aura_points(post['author_id'], AURA_POINTS['create_post'], 'create_post')
+        
         # Notify the author
         try:
             await context.bot.send_message(
@@ -928,11 +994,14 @@ async def reject_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_i
         return
     
     try:
+        # Deduct aura points for post deletion due to violation
+        update_aura_points(post['author_id'], AURA_POINTS['post_deleted'], 'post_deleted')
+        
         # Notify the author
         try:
             await context.bot.send_message(
                 chat_id=post['author_id'],
-                text="❌ Your post was not approved by the admin."
+                text="❌ Your post was not approved by the admin and has been removed."
             )
         except Exception as e:
             logger.error(f"Error notifying author: {e}")
@@ -1064,12 +1133,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             )
                         ])
                 
-                display_name = get_display_name(user_data)
-                display_sex = get_display_sex(user_data)
+                author_display = format_user_with_aura(user_data['user_id'])
                 
                 await update.message.reply_text(
-                    f"👤 *{display_name}* 🎖 \n"
-                    f"📌 Sex: {display_sex}\n\n"
+                    f"👤 {author_display} 🎖 \n"
+                    f"📌 Sex: {get_display_sex(user_data)}\n\n"
                     f"👥 Followers: {len(followers)}\n"
                     f"🎖 Batch: User\n"
                     f"⭐️ Contributions: {rating} {stars}\n"
@@ -1125,7 +1193,7 @@ async def show_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Get recent messages
     messages = db_fetch_all('''
-        SELECT pm.*, u.anonymous_name as sender_name, u.sex as sender_sex
+        SELECT pm.*, u.anonymous_name as sender_name, u.sex as sender_sex, u.user_id as sender_id
         FROM private_messages pm
         JOIN users u ON pm.sender_id = u.user_id
         WHERE pm.receiver_id = %s
@@ -1156,7 +1224,8 @@ async def show_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             timestamp = msg['timestamp'].strftime('%b %d')
         preview = msg['content'][:30] + '...' if len(msg['content']) > 30 else msg['content']
-        inbox_text += f"{status} *{msg['sender_name']}* {msg['sender_sex']} - {preview} ({timestamp})\n"
+        sender_display = format_user_with_aura(msg['sender_id'])
+        inbox_text += f"{status} {sender_display} - {preview} ({timestamp})\n"
     
     keyboard = [
         [InlineKeyboardButton("📝 View Messages", callback_data='view_messages')],
@@ -1190,7 +1259,7 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE, page
     offset = (page - 1) * per_page
     
     messages = db_fetch_all('''
-        SELECT pm.*, u.anonymous_name as sender_name, u.sex as sender_sex
+        SELECT pm.*, u.anonymous_name as sender_name, u.sex as sender_sex, u.user_id as sender_id
         FROM private_messages pm
         JOIN users u ON pm.sender_id = u.user_id
         WHERE pm.receiver_id = %s
@@ -1226,7 +1295,8 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE, page
             timestamp = datetime.strptime(msg['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%b %d, %H:%M')
         else:
             timestamp = msg['timestamp'].strftime('%b %d, %H:%M')
-        messages_text += f"👤 *{msg['sender_name']}* {msg['sender_sex']} ({timestamp}):\n"
+        sender_display = format_user_with_aura(msg['sender_id'])
+        messages_text += f"👤 {sender_display} ({timestamp}):\n"
         messages_text += f"{escape_markdown(msg['content'], version=2)}\n\n"
         messages_text += f"━━━━━━━━━━━━━━━━━━━━━\n\n"
     
@@ -1485,19 +1555,15 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         commenter_id = comment['author_id']
         commenter = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (commenter_id,))
         display_sex = get_display_sex(commenter)
-        display_name = get_display_name(commenter)
         
         rating = calculate_user_rating(commenter_id)
         stars = format_stars(rating)
         
-        # FIXED: Use profileid_ with user_id instead of profile_ with name
-        profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{commenter_id}"
+        # Use the new format_user_with_aura function
+        author_display = format_user_with_aura(commenter_id)
 
-        # Build author text
-        author_text = (
-            f"[{escape_markdown(display_name, version=2)}]({profile_link}) "
-            f"{display_sex} {stars}"
-        )
+        # Build author text with aura points
+        author_text = f"{author_display} {display_sex} {stars}"
 
         # Send comment using helper function
         msg_id = await send_comment_message(context, chat_id, comment, author_text, header_message_id)
@@ -1515,19 +1581,15 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             for child in children:
                 reply_user_id = child['author_id']
                 reply_user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (reply_user_id,))
-                reply_display_name = get_display_name(reply_user)
                 reply_display_sex = get_display_sex(reply_user)
                 rating_reply = calculate_user_rating(reply_user_id)
                 stars_reply = format_stars(rating_reply)
                 
-                # FIXED: Use profileid_ with user_id for replies too
-                reply_profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{reply_user_id}"
+                # Use the new format_user_with_aura function for replies
+                reply_author_display = format_user_with_aura(reply_user_id)
                 
-                # Build author text for reply
-                reply_author_text = (
-                    f"[{escape_markdown(reply_display_name, version=2)}]({reply_profile_link}) "
-                    f"{reply_display_sex} {stars_reply}"
-                )
+                # Build author text for reply with aura points
+                reply_author_text = f"{reply_author_display} {reply_display_sex} {stars_reply}"
 
                 # Send reply using helper function
                 child_msg_id = await send_comment_message(context, chat_id, child, reply_author_text, parent_msg_id)
@@ -1597,7 +1659,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
     if not user:
         return
     
-    display_name = get_display_name(user)
+    author_display = format_user_with_aura(user_id)
     display_sex = get_display_sex(user)
     rating = calculate_user_rating(user_id)
     stars = format_stars(rating)
@@ -1619,7 +1681,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
-            f"👤 *{display_name}* 🎖 \n"
+            f"👤 {author_display} 🎖 \n"
             f"📌 Sex: {display_sex}\n"
             f"⭐️ Rating: {rating} {stars}\n"
             f"🎖 Batch: User\n"
@@ -1943,7 +2005,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
 
-        # FIXED: Like/Dislike reaction handling
+        # FIXED: Like/Dislike reaction handling with Aura Points
         elif query.data.startswith(("likecomment_", "dislikecomment_", "likereply_", "dislikereply_")):
             try:
                 parts = query.data.split('_')
@@ -1956,6 +2018,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     (comment_id, user_id)
                 )
 
+                # Get comment author for aura points
+                comment = db_fetch_one(
+                    "SELECT author_id FROM comments WHERE comment_id = %s",
+                    (comment_id,)
+                )
+                comment_author_id = comment['author_id'] if comment else None
+
                 if existing_reaction:
                     if existing_reaction['type'] == reaction_type:
                         # User is clicking the same reaction - remove it (toggle off)
@@ -1963,18 +2032,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "DELETE FROM reactions WHERE comment_id = %s AND user_id = %s",
                             (comment_id, user_id)
                         )
+                        # Remove aura points for removed reaction
+                        if comment_author_id and comment_author_id != user_id:
+                            if reaction_type == 'like':
+                                update_aura_points(comment_author_id, -AURA_POINTS['comment_receive_like'], 'removed_like')
+                            else:
+                                update_aura_points(comment_author_id, -AURA_POINTS['comment_receive_dislike'], 'removed_dislike')
                     else:
                         # User is changing reaction - update it
                         db_execute(
                             "UPDATE reactions SET type = %s WHERE comment_id = %s AND user_id = %s",
                             (reaction_type, comment_id, user_id)
                         )
+                        # Update aura points for changed reaction
+                        if comment_author_id and comment_author_id != user_id:
+                            if existing_reaction['type'] == 'like' and reaction_type == 'dislike':
+                                # Changing from like to dislike
+                                update_aura_points(comment_author_id, -AURA_POINTS['comment_receive_like'] + AURA_POINTS['comment_receive_dislike'], 'like_to_dislike')
+                            elif existing_reaction['type'] == 'dislike' and reaction_type == 'like':
+                                # Changing from dislike to like
+                                update_aura_points(comment_author_id, -AURA_POINTS['comment_receive_dislike'] + AURA_POINTS['comment_receive_like'], 'dislike_to_like')
                 else:
                     # User is adding a new reaction
                     db_execute(
                         "INSERT INTO reactions (comment_id, user_id, type) VALUES (%s, %s, %s)",
                         (comment_id, user_id, reaction_type)
                     )
+                    # Add aura points for new reaction
+                    if comment_author_id and comment_author_id != user_id:
+                        if reaction_type == 'like':
+                            update_aura_points(comment_author_id, AURA_POINTS['comment_receive_like'], 'received_like')
+                        else:
+                            update_aura_points(comment_author_id, AURA_POINTS['comment_receive_dislike'], 'received_dislike')
 
                 # Get updated counts
                 likes_row = db_fetch_one(
@@ -2070,17 +2159,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if not existing_reaction or existing_reaction['type'] != reaction_type:
                     comment_author = db_fetch_one(
                         "SELECT user_id, notifications_enabled FROM users WHERE user_id = %s",
-                        (comment['author_id'],)
+                        (comment_author_id,)
                     )
                     if comment_author and comment_author['notifications_enabled'] and comment_author['user_id'] != user_id:
-                        reactor_name = get_display_name(
-                            db_fetch_one("SELECT * FROM users WHERE user_id = %s", (user_id,))
-                        )
+                        reactor_display = format_user_with_aura(user_id)
                         post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
                         post_preview = post['content'][:50] + '...' if len(post['content']) > 50 else post['content']
                         
+                        reaction_emoji = "❤️" if reaction_type == 'like' else "👎"
                         notification_text = (
-                            f"❤️ {reactor_name} reacted to your comment:\n\n"
+                            f"{reaction_emoji} {reactor_display} reacted to your comment:\n\n"
                             f"🗨 {escape_markdown(comment['content'][:100], version=2)}\n\n"
                             f"📝 Post: {escape_markdown(post_preview, version=2)}\n\n"
                             f"[View conversation](https://t.me/{BOT_USERNAME}?start=comments_{post_id})"
@@ -2471,7 +2559,16 @@ async def show_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (SELECT COUNT(*) FROM posts WHERE approved = TRUE) as approved_posts,
             (SELECT COUNT(*) FROM posts WHERE approved = FALSE) as pending_posts,
             (SELECT COUNT(*) FROM comments) as total_comments,
-            (SELECT COUNT(*) FROM private_messages) as total_messages
+            (SELECT COUNT(*) FROM private_messages) as total_messages,
+            (SELECT SUM(aura_points) FROM users) as total_aura_points
+    ''')
+    
+    # Get top users by aura points
+    top_users = db_fetch_all('''
+        SELECT anonymous_name, aura_points 
+        FROM users 
+        ORDER BY aura_points DESC 
+        LIMIT 5
     ''')
     
     text = (
@@ -2480,8 +2577,13 @@ async def show_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📝 Approved Posts: {stats['approved_posts']}\n"
         f"🕒 Pending Posts: {stats['pending_posts']}\n"
         f"💬 Total Comments: {stats['total_comments']}\n"
-        f"📩 Private Messages: {stats['total_messages']}"
+        f"📩 Private Messages: {stats['total_messages']}\n"
+        f"⚡ Total Aura Points: {stats['total_aura_points'] or 0}\n\n"
+        "🏆 *Top Aura Users:*\n"
     )
+    
+    for idx, user in enumerate(top_users, 1):
+        text += f"{idx}. {user['anonymous_name']} - {user['aura_points']} ⚡\n"
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data='admin_panel')]
@@ -2643,6 +2745,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "UPDATE users SET waiting_for_comment = FALSE, comment_post_id = NULL, comment_idx = NULL, reply_idx = NULL WHERE user_id = %s",
             (user_id,)
         )
+    
+        # Award aura points for comment creation
+        update_aura_points(user_id, AURA_POINTS['create_comment'], 'create_comment')
     
         await update.message.reply_text("✅ Your comment has been posted!", reply_markup=main_menu)
         
