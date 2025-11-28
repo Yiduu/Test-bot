@@ -1754,9 +1754,9 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         reply_markup=InlineKeyboardMarkup(final_keyboard)
     )
     except Exception as e:
-        logger.error(f"Error showing previous posts: {e}")
-        if hasattr(update, 'message') and update.message:
-            await update.message.reply_text("❌ Error loading your posts. Please try again.")
+            logger.error(f"Error showing previous posts: {e}")
+            if hasattr(update, 'message') and update.message:
+                await update.message.reply_text("❌ Error loading your posts. Please try again.")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
