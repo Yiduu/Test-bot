@@ -814,13 +814,12 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         return
     
     try:
-        # Format the post content for the channel
+        # Format the post content for the channel - REMOVED LINKS
         hashtag = f"#{post['category']}"
         caption_text = (
             f"{post['content']}\n\n"
             f"━━━━━━━━━━━━━━━\n"
-            f"{hashtag}\n"
-            f"[Telegram](https://t.me/christianvent)| [Bot](https://t.me/{BOT_USERNAME})"
+            f"{hashtag}"
         )
         
         # Create the comments button
@@ -1633,7 +1632,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         reply_markup=kb,
         parse_mode=ParseMode.MARKDOWN)
 
-# UPDATED: Function to show user's previous posts with NEW CLEAN UI
+# UPDATED: Function to show user's previous posts with IMPROVED CLEAN UI
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
@@ -1660,7 +1659,7 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
     else:
-        # NEW CLEAN UI DESIGN
+        # IMPROVED CLEAN UI DESIGN - Each post as a separate card with buttons directly under
         text = f"📚 *My Previous Posts*\n\n"
         
         for post in posts:
@@ -1678,17 +1677,17 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             text += f"❝ {escaped_snippet} ❞\n\n"
             
             # Add spacing between post cards
-            text += "\\-\n\n"
-        
-        # Remove the last separator if it exists
-        if text.endswith("\\-\n\n"):
-            text = text[:-4]
+            text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    # Build keyboard with new button layout
+    # Build keyboard with NEW STRUCTURE - buttons directly under each post
     keyboard = []
     
-    # Add action buttons for each post - NEW CLEAN LAYOUT
+    # Add action buttons for each post - DIRECTLY UNDER EACH POST
     for post in posts:
+        # Create snippet for callback data reference
+        snippet = post['content'][:140] + '...' if len(post['content']) > 140 else post['content']
+        
+        # Add the three buttons for this specific post
         post_buttons = [
             InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
             InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
