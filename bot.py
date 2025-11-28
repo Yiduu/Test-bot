@@ -226,16 +226,18 @@ def update_aura_points(user_id: str, points: int, action_type: str = None):
 def format_user_with_aura(user_id: str) -> str:
     """Format username with aura points in italic and zigzag separator."""
     user = db_fetch_one(
-        "SELECT anonymous_name, aura_points FROM users WHERE user_id = %s",
+        "SELECT anonymous_name, aura_points, sex FROM users WHERE user_id = %s",
         (user_id,)
     )
     
-    if user:
-        username = user['anonymous_name'] or "Anonymous"
+    if user and user['anonymous_name']:
+        username = user['anonymous_name']
         aura_points = user['aura_points'] or 0
-        # Use italic and zigzag separator (⚡)
-        return f"*{escape_markdown(username, version=2)}* ⚡ {aura_points}"
-    return "*Anonymous* ⚡ 0"
+        sex_emoji = user['sex'] or '👤'
+        # Use italic, sex emoji first, then clickable username with zigzag separator
+        profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{user_id}"
+        return f"{sex_emoji} [*{escape_markdown(username, version=2)}*]({profile_link}) ⚡ {aura_points}"
+    return "👤 [*Anonymous*](https://t.me/{BOT_USERNAME}?start=profileid_0) ⚡ 0"
 
 def get_user_aura_points(user_id: str) -> int:
     """Get user's current aura points."""
@@ -404,7 +406,7 @@ async def update_channel_post_comment_count(context: ContextTypes.DEFAULT_TYPE, 
 
 async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top_users = db_fetch_all('''
-        SELECT user_id, anonymous_name, sex, aura_points,
+        SELECT user_id, aura_points,
                (SELECT COUNT(*) FROM posts WHERE author_id = users.user_id AND approved = TRUE) + 
                (SELECT COUNT(*) FROM comments WHERE author_id = users.user_id) AS total
         FROM users
@@ -414,22 +416,19 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     leaderboard_text = "🏆 *Top Contributors* 🏆\n\n"
     for idx, user in enumerate(top_users, start=1):
-        stars = format_stars(user['total'] // 5)
-        aura_display = format_user_with_aura(user['user_id'])
-        leaderboard_text += f"{idx}. {aura_display} - {user['total']} contributions {stars}\n"
+        user_display = format_user_with_aura(user['user_id'])
+        leaderboard_text += f"{idx}. {user_display} - {user['total']} contributions\n"
     
     user_id = str(update.effective_user.id)
     user_rank = get_user_rank(user_id)
     
     if user_rank and user_rank > 10:
-        user_data = db_fetch_one("SELECT anonymous_name, sex, aura_points FROM users WHERE user_id = %s", (user_id,))
-        if user_data:
-            user_contributions = calculate_user_rating(user_id)
-            aura_display = format_user_with_aura(user_id)
-            leaderboard_text += (
-                f"\n...\n"
-                f"{user_rank}. {aura_display} - {user_contributions} contributions\n"
-            )
+        user_display = format_user_with_aura(user_id)
+        user_contributions = calculate_user_rating(user_id)
+        leaderboard_text += (
+            f"\n...\n"
+            f"{user_rank}. {user_display} - {user_contributions} contributions\n"
+        )
     
     keyboard = [
         [InlineKeyboardButton("📱 Main Menu", callback_data='menu')],
@@ -460,7 +459,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
     try:
-        user = db_fetch_one("SELECT notifications_enabled, privacy_public, is_admin, aura_points FROM users WHERE user_id = %s", (user_id,))
+        user = db_fetch_one("SELECT notifications_enabled, privacy_public, is_admin FROM users WHERE user_id = %s", (user_id,))
         
         if not user:
             if update.message:
@@ -493,24 +492,24 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        aura_display = format_user_with_aura(user_id)
+        user_display = format_user_with_aura(user_id)
         
         if update.callback_query:
             try:
                 await update.callback_query.edit_message_text(
-                    f"⚙️ *Settings Menu*\n\n{aura_display}",
+                    f"⚙️ *Settings Menu*\n\n{user_display}",
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
             except BadRequest:
                 await update.callback_query.message.reply_text(
-                    f"⚙️ *Settings Menu*\n\n{aura_display}",
+                    f"⚙️ *Settings Menu*\n\n{user_display}",
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
         else:
             await update.message.reply_text(
-                f"⚙️ *Settings Menu*\n\n{aura_display}",
+                f"⚙️ *Settings Menu*\n\n{user_display}",
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -609,14 +608,13 @@ async def notify_user_of_reply(context: ContextTypes.DEFAULT_TYPE, post_id: int,
         if not original_author or not original_author['notifications_enabled']:
             return
         
-        replier = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (replier_id,))
-        replier_name = format_user_with_aura(replier_id)
+        replier_display = format_user_with_aura(replier_id)
         
         post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
         post_preview = post['content'][:50] + '...' if len(post['content']) > 50 else post['content']
         
         notification_text = (
-            f"💬 {replier_name} replied to your comment:\n\n"
+            f"💬 {replier_display} replied to your comment:\n\n"
             f"🗨 {escape_markdown(comment['content'][:100], version=2)}\n\n"
             f"📝 Post: {escape_markdown(post_preview, version=2)}\n\n"
             f"[View conversation](https://t.me/{BOT_USERNAME}?start=comments_{post_id})"
@@ -638,8 +636,7 @@ async def notify_admin_of_new_post(context: ContextTypes.DEFAULT_TYPE, post_id: 
     if not post:
         return
     
-    author = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (post['author_id'],))
-    author_name = format_user_with_aura(post['author_id'])
+    author_display = format_user_with_aura(post['author_id'])
     
     post_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
     
@@ -653,7 +650,7 @@ async def notify_admin_of_new_post(context: ContextTypes.DEFAULT_TYPE, post_id: 
     try:
         await context.bot.send_message(
             chat_id=ADMIN_ID,
-            text=f"🆕 New post awaiting approval from {author_name}:\n\n{post_preview}",
+            text=f"🆕 New post awaiting approval from {author_display}:\n\n{post_preview}",
             reply_markup=keyboard,
             parse_mode=ParseMode.MARKDOWN
         )
@@ -674,15 +671,14 @@ async def notify_user_of_private_message(context: ContextTypes.DEFAULT_TYPE, sen
         if not receiver or not receiver['notifications_enabled']:
             return
         
-        sender = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (sender_id,))
-        sender_name = format_user_with_aura(sender_id)
+        sender_display = format_user_with_aura(sender_id)
         
         # Truncate long messages for the notification
         preview_content = message_content[:100] + '...' if len(message_content) > 100 else message_content
         
         notification_text = (
             f"📩 *New Private Message*\n\n"
-            f"👤 From: {sender_name}\n\n"
+            f"👤 From: {sender_display}\n\n"
             f"💬 {escape_markdown(preview_content, version=2)}\n\n"
             f"💭 _Use /inbox to view all messages_"
         )
@@ -1101,7 +1097,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 
                 rating = calculate_user_rating(user_data['user_id'])
-                stars = format_stars(rating)
                 current_user_id = user_id
                 btn = []
                 
@@ -1131,16 +1126,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 "🫂 Follow",
                                 callback_data=f'follow_{user_data["user_id"]}'
                             )
-                        ])
-                
+                        ]
                 author_display = format_user_with_aura(user_data['user_id'])
                 
                 await update.message.reply_text(
-                    f"👤 {author_display} 🎖 \n"
-                    f"📌 Sex: {get_display_sex(user_data)}\n\n"
+                    f"👤 {author_display}\n\n"
                     f"👥 Followers: {len(followers)}\n"
-                    f"🎖 Batch: User\n"
-                    f"⭐️ Contributions: {rating} {stars}\n"
+                    f"⭐️ Contributions: {rating}\n"
                     f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
                     f"_Use /menu to return_",
                     reply_markup=InlineKeyboardMarkup(btn) if btn else None,
@@ -1193,7 +1185,7 @@ async def show_inbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Get recent messages
     messages = db_fetch_all('''
-        SELECT pm.*, u.anonymous_name as sender_name, u.sex as sender_sex, u.user_id as sender_id
+        SELECT pm.*, u.user_id as sender_id
         FROM private_messages pm
         JOIN users u ON pm.sender_id = u.user_id
         WHERE pm.receiver_id = %s
@@ -1259,7 +1251,7 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE, page
     offset = (page - 1) * per_page
     
     messages = db_fetch_all('''
-        SELECT pm.*, u.anonymous_name as sender_name, u.sex as sender_sex, u.user_id as sender_id
+        SELECT pm.*, u.user_id as sender_id
         FROM private_messages pm
         JOIN users u ON pm.sender_id = u.user_id
         WHERE pm.receiver_id = %s
@@ -1315,8 +1307,8 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE, page
     # Reply and block buttons for each message
     for msg in messages:
         keyboard_buttons.append([
-            InlineKeyboardButton(f"💬 Reply to {msg['sender_name']}", callback_data=f"reply_msg_{msg['sender_id']}"),
-            InlineKeyboardButton(f"⛔ Block {msg['sender_name']}", callback_data=f"block_user_{msg['sender_id']}")
+            InlineKeyboardButton(f"💬 Reply", callback_data=f"reply_msg_{msg['sender_id']}"),
+            InlineKeyboardButton(f"⛔ Block", callback_data=f"block_user_{msg['sender_id']}")
         ])
     
     keyboard_buttons.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
@@ -1553,17 +1545,12 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
 
     for idx, comment in enumerate(comments):
         commenter_id = comment['author_id']
-        commenter = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (commenter_id,))
-        display_sex = get_display_sex(commenter)
-        
-        rating = calculate_user_rating(commenter_id)
-        stars = format_stars(rating)
         
         # Use the new format_user_with_aura function
         author_display = format_user_with_aura(commenter_id)
 
         # Build author text with aura points
-        author_text = f"{author_display} {display_sex} {stars}"
+        author_text = f"{author_display}"
 
         # Send comment using helper function
         msg_id = await send_comment_message(context, chat_id, comment, author_text, header_message_id)
@@ -1580,16 +1567,12 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             )
             for child in children:
                 reply_user_id = child['author_id']
-                reply_user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (reply_user_id,))
-                reply_display_sex = get_display_sex(reply_user)
-                rating_reply = calculate_user_rating(reply_user_id)
-                stars_reply = format_stars(rating_reply)
                 
                 # Use the new format_user_with_aura function for replies
                 reply_author_display = format_user_with_aura(reply_user_id)
                 
                 # Build author text for reply with aura points
-                reply_author_text = f"{reply_author_display} {reply_display_sex} {stars_reply}"
+                reply_author_text = f"{reply_author_display}"
 
                 # Send reply using helper function
                 child_msg_id = await send_comment_message(context, chat_id, child, reply_author_text, parent_msg_id)
@@ -1660,9 +1643,6 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         return
     
     author_display = format_user_with_aura(user_id)
-    display_sex = get_display_sex(user)
-    rating = calculate_user_rating(user_id)
-    stars = format_stars(rating)
     
     followers = db_fetch_all(
         "SELECT * FROM followers WHERE followed_id = %s",
@@ -1681,10 +1661,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
-            f"👤 {author_display} 🎖 \n"
-            f"📌 Sex: {display_sex}\n"
-            f"⭐️ Rating: {rating} {stars}\n"
-            f"🎖 Batch: User\n"
+            f"👤 {author_display}\n\n"
             f"👥 Followers: {len(followers)}\n"
             f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
             f"_Use /menu to return_"
@@ -2565,7 +2542,7 @@ async def show_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Get top users by aura points
     top_users = db_fetch_all('''
-        SELECT anonymous_name, aura_points 
+        SELECT user_id, aura_points 
         FROM users 
         ORDER BY aura_points DESC 
         LIMIT 5
@@ -2583,7 +2560,8 @@ async def show_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     for idx, user in enumerate(top_users, 1):
-        text += f"{idx}. {user['anonymous_name']} - {user['aura_points']} ⚡\n"
+        user_display = format_user_with_aura(user['user_id'])
+        text += f"{idx}. {user_display}\n"
     
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔙 Back", callback_data='admin_panel')]
