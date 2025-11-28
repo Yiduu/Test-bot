@@ -1634,6 +1634,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         parse_mode=ParseMode.MARKDOWN)
 
 # UPDATED: Function to show user's previous posts with new clean UI and buttons directly under each post
+# UPDATED: Function to show user's previous posts with each post as separate message with its own buttons
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
@@ -1680,13 +1681,25 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text("❌ Error loading your posts. Please try again.")
         return
     
-    # NEW: Build clean UI with post cards and buttons directly under each
-    text = f"📚 *My Previous Posts*\n\n"
-    text += f"*Page {page} of {total_pages}*\n\n"
+    # Send header message
+    header_text = f"📚 *My Previous Posts*\n\n*Page {page} of {total_pages}*\n\n"
     
-    keyboard = []
+    if hasattr(update, 'callback_query') and update.callback_query:
+        await update.callback_query.edit_message_text(
+            header_text,
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+        chat_id = update.callback_query.message.chat_id
+    else:
+        if hasattr(update, 'message') and update.message:
+            await update.message.reply_text(
+                header_text,
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            chat_id = update.message.chat_id
     
-    for idx, post in enumerate(posts):
+    # Send each post as separate message with its own buttons
+    for post in posts:
         # Create snippet (100-150 characters)
         snippet = post['content']
         if len(snippet) > 150:
@@ -1694,59 +1707,52 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         elif len(snippet) > 100:
             snippet = snippet[:100] + "..."
         
-        # Add post card with clean formatting
         escaped_snippet = escape_markdown(snippet, version=2)
         escaped_category = escape_markdown(post['category'], version=2)
         
-        text += f"📝 *Your Post \\[{escaped_category}\\]:*\n"
-        text += f"❝ {escaped_snippet} ❞\n\n"
+        post_text = f"📝 *Your Post \\[{escaped_category}\\]:*\n❝ {escaped_snippet} ❞"
         
-        # Add action buttons for this post directly under the snippet
-        keyboard.append([
-            InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
-            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
-            InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
-        ])
+        # Create buttons for this specific post
+        keyboard = [
+            [
+                InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
+                InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
+                InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
+            ]
+        ]
         
-        # Add spacing between post cards (empty line) except after last post
-        if idx < len(posts) - 1:
-            text += "\n"
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=post_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
     
-    # NEW: Beautiful pagination
+    # Send pagination at the end
     pagination_buttons = []
     
-    # Previous page button (disabled on first page)
     if page > 1:
         pagination_buttons.append(InlineKeyboardButton("⬅️ Previous Page", callback_data=f"previous_posts_{page-1}"))
     else:
         pagination_buttons.append(InlineKeyboardButton("❌ Previous Page", callback_data="noop"))
     
-    # Page indicator (non-clickable)
     pagination_buttons.append(InlineKeyboardButton(f"• {page}/{total_pages} •", callback_data="noop"))
     
-    # Next page button (disabled on last page)
     if page < total_pages:
         pagination_buttons.append(InlineKeyboardButton("Next Page ➡️", callback_data=f"previous_posts_{page+1}"))
     else:
         pagination_buttons.append(InlineKeyboardButton("❌ Next Page", callback_data="noop"))
     
-    keyboard.append(pagination_buttons)
-    keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
+    final_keyboard = [
+        pagination_buttons,
+        [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
+    ]
     
-    try:
-        if hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.edit_message_text(
-                text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
-        else:
-            if hasattr(update, 'message') and update.message:
-                await update.message.reply_text(
-                    text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="Use the buttons below to navigate:",
+        reply_markup=InlineKeyboardMarkup(final_keyboard)
+    )
     except Exception as e:
         logger.error(f"Error showing previous posts: {e}")
         if hasattr(update, 'message') and update.message:
