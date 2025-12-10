@@ -469,10 +469,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_post_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE, post_content: str, category: str, media_type: str = 'text', media_id: str = None, thread_from_post_id: int = None):
     keyboard = [
         [
-            InlineKeyboardButton("✏️ Edit", callback_data='edit_post'),
-            InlineKeyboardButton("❌ Cancel", callback_data='cancel_post')
-        ],
-        [
+            InlineKeyboardButton("❌ Cancel", callback_data='cancel_post'),
             InlineKeyboardButton("✅ Submit", callback_data='confirm_post')
         ]
     ]
