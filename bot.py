@@ -1630,129 +1630,140 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         reply_markup=kb,
         parse_mode=ParseMode.MARKDOWN)
 
-# UPDATED: Function to show user's previous posts with NEW CLEAN UI
+# FIXED: Function to show user's previous posts with proper error handling
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
-    user_id = str(update.effective_user.id)
-    
-    per_page = 8  # Increased to show more posts per page
-    offset = (page - 1) * per_page
-    
-    # Get user's posts with pagination
-    posts = db_fetch_all(
-        "SELECT * FROM posts WHERE author_id = %s AND approved = TRUE ORDER BY timestamp DESC LIMIT %s OFFSET %s",
-        (user_id, per_page, offset)
-    )
-    
-    total_posts_row = db_fetch_one(
-        "SELECT COUNT(*) as count FROM posts WHERE author_id = %s AND approved = TRUE",
-        (user_id,)
-    )
-    total_posts = total_posts_row['count'] if total_posts_row else 0
-    total_pages = (total_posts + per_page - 1) // per_page
-    
-    if not posts:
-        # If no posts, show this clean message
-        text = (
-            "📚 *My Previous Posts*\n\n"
-            "✨ *You haven't published any posts yet!*\n\n"
-            "🌟 Tap the button below to share your first thought:"
-        )
-        keyboard = [
-            [InlineKeyboardButton("🌟 Share My Thoughts", callback_data='ask')],
-            [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
-        ]
-    else:
-        # NEW CLEAN UI DESIGN WITH CATEGORY FILTER
-        text = f"📚 *My Posts* - Page {page}/{total_pages}\n\n"
-        
-        # Add a filter/search button
-        keyboard = [
-            [InlineKeyboardButton("🔍 Filter by Category", callback_data='filter_posts')]
-        ]
-        
-        for idx, post in enumerate(posts, start=1):
-            # Get the category display name
-            category_display = next((name for name, code in CATEGORIES if code == post['category']), post['category'])
-            
-            # Create a clean, truncated snippet
-            snippet = post['content'][:80]
-            if len(post['content']) > 80:
-                snippet += '...'
-            
-            # Escape markdown for snippet
-            escaped_snippet = escape_markdown(snippet, version=2)
-            
-            # Format with index number
-            text += f"`{idx + offset}.` {category_display}\n"
-            text += f"└─ {escaped_snippet}\n\n"
-        
-        # Add action buttons for each post - TWO ROWS PER POST
-        for post in posts:
-            # First row: Quick actions
-            first_row = [
-                InlineKeyboardButton("💬 Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
-                InlineKeyboardButton("📊 Stats", callback_data=f"post_stats_{post['post_id']}")
-            ]
-            keyboard.append(first_row)
-            
-            # Second row: Additional actions
-            second_row = [
-                InlineKeyboardButton("🧵 Continue", callback_data=f"continue_post_{post['post_id']}"),
-                InlineKeyboardButton("🗑 Delete", callback_data=f"delete_post_{post['post_id']}")
-            ]
-            keyboard.append(second_row)
-            
-            # Add a small separator (empty row) between posts
-            keyboard.append([])
-    
-    # Add pagination with beautiful design
-    if total_pages > 1:
-        pagination_row = []
-        
-        # Previous page button
-        if page > 1:
-            pagination_row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"previous_posts_{page-1}"))
-        else:
-            # Disabled state for first page
-            pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
-        
-        # Page indicator
-        pagination_row.append(InlineKeyboardButton(f"📄 {page}/{total_pages}", callback_data="noop"))
-        
-        # Next page button
-        if page < total_pages:
-            pagination_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"previous_posts_{page+1}"))
-        else:
-            # Disabled state for last page
-            pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
-        
-        keyboard.append(pagination_row)
-    
-    # Add main menu and refresh buttons
-    bottom_row = [
-        InlineKeyboardButton("🔄 Refresh", callback_data='previous_posts_1'),
-        InlineKeyboardButton("📱 Menu", callback_data='menu')
-    ]
-    keyboard.append(bottom_row)
-    
     try:
-        if hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.edit_message_text(
-                text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode=ParseMode.MARKDOWN_V2
+        user_id = str(update.effective_user.id)
+        
+        per_page = 5
+        offset = (page - 1) * per_page
+        
+        # Get user's posts with pagination
+        posts = db_fetch_all(
+            "SELECT * FROM posts WHERE author_id = %s AND approved = TRUE ORDER BY timestamp DESC LIMIT %s OFFSET %s",
+            (user_id, per_page, offset)
+        )
+        
+        if posts is None:
+            # Database error
+            error_msg = "❌ Database error. Please try again later."
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.message.reply_text(error_msg)
+            elif hasattr(update, 'message') and update.message:
+                await update.message.reply_text(error_msg)
+            return
+        
+        total_posts_row = db_fetch_one(
+            "SELECT COUNT(*) as count FROM posts WHERE author_id = %s AND approved = TRUE",
+            (user_id,)
+        )
+        total_posts = total_posts_row['count'] if total_posts_row else 0
+        total_pages = max(1, (total_posts + per_page - 1) // per_page) if per_page > 0 else 1
+        
+        if not posts:
+            text = (
+                "📚 *My Previous Posts*\n\n"
+                "✨ *You haven't published any posts yet!*\n\n"
+                "🌟 Tap the button below to share your first thought:"
             )
+            keyboard = [
+                [InlineKeyboardButton("🌟 Share My Thoughts", callback_data='ask')],
+                [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
+            ]
         else:
-            if hasattr(update, 'message') and update.message:
-                await update.message.reply_text(
+            # Simple and clean UI design
+            text = f"📚 *My Posts* - Page {page}/{total_pages}\n\n"
+            
+            for idx, post in enumerate(posts, start=1):
+                # Get category display name
+                category_display = next((name for name, code in CATEGORIES if code == post['category']), post['category'])
+                
+                # Create a clean, truncated snippet
+                snippet = post['content'][:80]
+                if len(post['content']) > 80:
+                    snippet += '...'
+                
+                # Escape markdown for snippet
+                escaped_snippet = escape_markdown(snippet, version=2)
+                
+                # Format with index number
+                text += f"`{idx + offset}.` *{category_display}*\n"
+                text += f"└─ {escaped_snippet}\n\n"
+            
+            # Build keyboard with action buttons for each post
+            keyboard = []
+            for post in posts:
+                # First row: Comments and Stats
+                row1 = [
+                    InlineKeyboardButton("💬 Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
+                    InlineKeyboardButton("📊 Stats", callback_data=f"post_stats_{post['post_id']}")
+                ]
+                keyboard.append(row1)
+                
+                # Second row: Continue and Delete
+                row2 = [
+                    InlineKeyboardButton("🧵 Continue", callback_data=f"continue_post_{post['post_id']}"),
+                    InlineKeyboardButton("🗑 Delete", callback_data=f"delete_post_{post['post_id']}")
+                ]
+                keyboard.append(row2)
+        
+        # Add pagination if needed
+        if total_pages > 1:
+            pagination_row = []
+            
+            # Previous page button
+            if page > 1:
+                pagination_row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"previous_posts_{page-1}"))
+            
+            # Page indicator (non-clickable)
+            pagination_row.append(InlineKeyboardButton(f"📄 {page}/{total_pages}", callback_data="noop"))
+            
+            # Next page button
+            if page < total_pages:
+                pagination_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"previous_posts_{page+1}"))
+            
+            keyboard.append(pagination_row)
+        
+        # Add bottom buttons
+        keyboard.append([
+            InlineKeyboardButton("🔄 Refresh", callback_data='previous_posts_1'),
+            InlineKeyboardButton("📱 Menu", callback_data='menu')
+        ])
+        
+        # Send or edit message
+        if hasattr(update, 'callback_query') and update.callback_query:
+            try:
+                await update.callback_query.edit_message_text(
                     text,
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
+            except BadRequest as e:
+                # If message is not modified or other error, send a new message
+                if "message is not modified" not in str(e).lower():
+                    await update.callback_query.message.reply_text(
+                        text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
+        elif hasattr(update, 'message') and update.message:
+            await update.message.reply_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            
     except Exception as e:
-        logger.error(f"Error showing previous posts: {e}")
-        if hasattr(update, 'message') and update.message:
-            await update.message.reply_text("❌ Error loading your posts. Please try again.")
+        logger.error(f"Error in show_previous_posts: {e}")
+        error_text = "❌ Error loading your posts. Please try again."
+        
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.message.reply_text(error_text)
+            elif hasattr(update, 'message') and update.message:
+                await update.message.reply_text(error_text)
+        except:
+            pass
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2486,70 +2497,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(
                 stats_text,
                 reply_markup=keyboard,
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
-            
-        # NEW: Handle category filter
-        elif query.data == 'filter_posts':
-            # Build category filter buttons
-            buttons = []
-            for i in range(0, len(CATEGORIES), 3):
-                row = []
-                for j in range(3):
-                    if i + j < len(CATEGORIES):
-                        name, code = CATEGORIES[i + j]
-                        row.append(InlineKeyboardButton(name, callback_data=f'filter_by_{code}'))
-                buttons.append(row)
-            buttons.append([InlineKeyboardButton("↩️ Back to All Posts", callback_data='previous_posts_1')])
-            
-            await query.message.edit_text(
-                "🔍 *Filter Posts by Category*\n\nSelect a category to filter your posts:",
-                reply_markup=InlineKeyboardMarkup(buttons),
-                parse_mode=ParseMode.MARKDOWN
-            )
-            
-        # NEW: Handle category filtering
-        elif query.data.startswith('filter_by_'):
-            category_code = query.data.split('_', 2)[2]
-            
-            # Get posts in this category
-            posts = db_fetch_all(
-                "SELECT * FROM posts WHERE author_id = %s AND approved = TRUE AND category = %s ORDER BY timestamp DESC",
-                (user_id, category_code)
-            )
-            
-            category_display = next((name for name, code in CATEGORIES if code == category_code), category_code)
-            
-            if not posts:
-                text = f"📚 *Posts in {category_display}*\n\nNo posts found in this category."
-                keyboard = [
-                    [InlineKeyboardButton("↩️ Back to All Posts", callback_data='previous_posts_1')],
-                    [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
-                ]
-            else:
-                text = f"📚 *Posts in {category_display}*\n\n"
-                
-                for idx, post in enumerate(posts, start=1):
-                    snippet = post['content'][:80]
-                    if len(post['content']) > 80:
-                        snippet += '...'
-                    
-                    escaped_snippet = escape_markdown(snippet, version=2)
-                    text += f"`{idx}.` {escaped_snippet}\n\n"
-                
-                keyboard = []
-                for post in posts:
-                    keyboard.append([
-                        InlineKeyboardButton("💬 Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
-                        InlineKeyboardButton("📊 Stats", callback_data=f"post_stats_{post['post_id']}")
-                    ])
-                
-                keyboard.append([InlineKeyboardButton("↩️ Back to All Posts", callback_data='previous_posts_1')])
-                keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
-            
-            await query.message.edit_text(
-                text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             
