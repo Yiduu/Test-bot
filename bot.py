@@ -1449,8 +1449,9 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
     per_page = 5
     offset = (page - 1) * per_page
 
+    # CHANGED: ORDER BY timestamp ASC to show oldest first, newest last
     comments = db_fetch_all(
-        "SELECT * FROM comments WHERE post_id = %s AND parent_comment_id = 0 ORDER BY timestamp DESC LIMIT %s OFFSET %s",
+        "SELECT * FROM comments WHERE post_id = %s AND parent_comment_id = 0 ORDER BY timestamp ASC LIMIT %s OFFSET %s",
         (post_id, per_page, offset)
     )
 
@@ -1511,8 +1512,9 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         async def send_replies_recursive(parent_comment_id, parent_msg_id, depth=1):
             if depth > MAX_REPLY_DEPTH:
                 return
+            # CHANGED: ORDER BY timestamp ASC for replies too
             children = db_fetch_all(
-                "SELECT * FROM comments WHERE parent_comment_id = %s ORDER BY timestamp",
+                "SELECT * FROM comments WHERE parent_comment_id = %s ORDER BY timestamp ASC",
                 (parent_comment_id,)
             )
             for child in children:
@@ -1541,16 +1543,18 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         # Start recursion for this top-level comment
         await send_replies_recursive(comment['comment_id'], msg_id, depth=1)
 
+    # Update pagination buttons to reflect chronological order
+    # When viewing chronological order, "Previous" goes to older comments, "Next" to newer ones
     pagination_buttons = []
     if page > 1:
-        pagination_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"viewcomments_{post_id}_{page-1}"))
+        pagination_buttons.append(InlineKeyboardButton("⬅️ Older Comments", callback_data=f"viewcomments_{post_id}_{page-1}"))
     if page < total_pages:
-        pagination_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"viewcomments_{post_id}_{page+1}"))
+        pagination_buttons.append(InlineKeyboardButton("Newer Comments ➡️", callback_data=f"viewcomments_{post_id}_{page+1}"))
     if pagination_buttons:
         pagination_markup = InlineKeyboardMarkup([pagination_buttons])
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"📄 Page {page}/{total_pages}",
+            text=f"📄 Page {page}/{total_pages} (Oldest to Newest)",
             reply_markup=pagination_markup,
             reply_to_message_id=header_message_id,
             disable_web_page_preview=True
