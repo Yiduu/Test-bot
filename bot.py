@@ -268,10 +268,18 @@ def calculate_user_rating(user_id):
     
     return post_count + comment_count
 
-def format_stars(rating, max_stars=5):
-    full_stars = min(rating // 5, max_stars)
-    empty_stars = max(0, max_stars - full_stars)
-    return '⭐️' * full_stars + '☆' * empty_stars
+def format_aura(rating):
+    """Create aura based on contribution points."""
+    if rating >= 100:
+        return "🟣"  # Purple aura for elite users (100+ points)
+    elif rating >= 50:
+        return "🔵"  # Blue aura for advanced users (50-99 points)
+    elif rating >= 25:
+        return "🟢"  # Green aura for intermediate users (25-49 points)
+    elif rating >= 10:
+        return "🟡"  # Yellow aura for active users (10-24 points)
+    else:
+        return "⚪️"  # White aura for new users (0-9 points)
 
 def count_all_comments(post_id):
     def count_replies(parent_id=None):
@@ -360,9 +368,9 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     leaderboard_text = "🏆 *Top Contributors* 🏆\n\n"
     for idx, user in enumerate(top_users, start=1):
-        stars = format_stars(user['total'] // 5)
+        aura = format_aura(user['total'])
         leaderboard_text += (
-            f"{idx}. {user['anonymous_name']} {user['sex']} - {user['total']} contributions {stars}\n"
+            f"{idx}. {user['anonymous_name']} {user['sex']} - {user['total']} contributions {aura}\n"
         )
     
     user_id = str(update.effective_user.id)
@@ -372,9 +380,10 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data = db_fetch_one("SELECT anonymous_name, sex FROM users WHERE user_id = %s", (user_id,))
         if user_data:
             user_contributions = calculate_user_rating(user_id)
+            aura = format_aura(user_contributions)
             leaderboard_text += (
                 f"\n...\n"
-                f"{user_rank}. {user_data['anonymous_name']} {user_data['sex']} - {user_contributions} contributions\n"
+                f"{user_rank}. {user_data['anonymous_name']} {user_data['sex']} - {user_contributions} contributions {aura}\n"
             )
     
     keyboard = [
@@ -1074,7 +1083,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"👤 *{display_name}* 🎖 \n"
                     f"📌 Sex: {display_sex}\n\n"
                     f"👥 Followers: {len(followers)}\n"
-                    f"🎖 Batch: User\n"
+                    f"🌀 *Aura:* {format_aura(rating)} (Level {rating // 10 + 1})\n"
                     f"⭐️ Contributions: {rating} {stars}\n"
                     f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
                     f"_Use /menu to return_",
@@ -1485,16 +1494,17 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         display_name = get_display_name(commenter)
         
         rating = calculate_user_rating(commenter_id)
-        stars = format_stars(rating)
+        
         
         profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{commenter_id}"
 
         # Build author text
         # Build author text - UPDATED: Italic name with sex emoji first
+        # Build author text - UPDATED: Italic name with sex emoji first, then zigzag separator, then italic "Aura", points and aura
         author_text = (
             f"{display_sex} "
             f"_[{escape_markdown(display_name, version=2)}]({profile_link})_ "
-            f"{stars}"
+            f"〰️ _Aura_ {rating} {format_aura(rating)}"
         )
 
         # Send comment using helper function
@@ -1517,16 +1527,17 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 reply_display_name = get_display_name(reply_user)
                 reply_display_sex = get_display_sex(reply_user)
                 rating_reply = calculate_user_rating(reply_user_id)
-                stars_reply = format_stars(rating_reply)
+                
                 
                 reply_profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{reply_user_id}"
                 
                 # Build author text for reply
                 # Build author text for reply - UPDATED: Italic name with sex emoji first
+                # Build author text for reply - UPDATED: Italic name with sex emoji first, then zigzag separator, then italic "Aura", points and aura
                 reply_author_text = (
                     f"{reply_display_sex} "
                     f"_[{escape_markdown(reply_display_name, version=2)}]({reply_profile_link})_ "
-                    f"{stars_reply}"
+                    f"〰️ _Aura_ {rating_reply} {format_aura(rating_reply)}"
                 )
 
                 # Send reply using helper function
@@ -1617,18 +1628,18 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
     ])
     await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
-            f"👤 *{display_name}* 🎖 \n"
-            f"📌 Sex: {display_sex}\n"
-            f"⭐️ Rating: {rating} {stars}\n"
-            f"🎖 Batch: User\n"
-            f"👥 Followers: {len(followers)}\n"
-            f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
-            f"_Use /menu to return_"
-        ),
-        reply_markup=kb,
-        parse_mode=ParseMode.MARKDOWN)
+    chat_id=chat_id,
+    text=(
+        f"👤 *{display_name}* \n"
+        f"📌 Sex: {display_sex}\n"
+        f"🌀 *Aura:* {format_aura(rating)} (Level {rating // 10 + 1})\n"
+        f"🎯 Contributions: {rating} points\n"
+        f"👥 Followers: {len(followers)}\n"
+        f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
+        f"_Use /menu to return_"
+    ),
+    reply_markup=kb,
+    parse_mode=ParseMode.MARKDOWN)
 
 # UPDATED: Function to show user's previous posts with NEW CLEAN UI
 # UPDATED: Function to show user's previous posts with CHRONOLOGICAL ORDER and NEW STRUCTURE
