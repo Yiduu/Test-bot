@@ -1627,13 +1627,14 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
         parse_mode=ParseMode.MARKDOWN)
 
 # UPDATED: Function to show user's previous posts with NEW CLEAN UI
+# UPDATED: Function to show user's previous posts with CHRONOLOGICAL ORDER and NEW STRUCTURE
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
     per_page = 5
     offset = (page - 1) * per_page
     
-    # Get user's posts with pagination
+    # Get user's posts with pagination - ORDERED BY TIMESTAMP (newest first)
     posts = db_fetch_all(
         "SELECT * FROM posts WHERE author_id = %s AND approved = TRUE ORDER BY timestamp DESC LIMIT %s OFFSET %s",
         (user_id, per_page, offset)
@@ -1647,16 +1648,19 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
     total_pages = (total_posts + per_page - 1) // per_page
     
     if not posts:
-        text = "📝 *My Posts*\n\nYou haven't posted anything yet or your posts are pending approval."
+        text = "📚 *My Previous Posts*\n\nYou haven't posted anything yet or your posts are pending approval."
         keyboard = [
             [InlineKeyboardButton("🌟 Share My Thoughts", callback_data='ask')],
-            [InlineKeyboardButton("📚 Back to My Content", callback_data='my_content_menu')]
+            [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
     else:
-        # NEW CLEAN UI DESIGN
-        text = f"📝 *My Posts* ({total_posts} total)\n\n"
+        # NEW STRUCTURE WITH NUMBERING
+        text = f"📚 *My Previous Posts*\n\n"
         
-        for post in posts:
+        for idx, post in enumerate(posts, start=1):
+            # Calculate actual post number (considering pagination)
+            post_number = (page - 1) * per_page + idx
+            
             # Create snippet (100-150 characters)
             snippet = post['content'][:140]
             if len(post['content']) > 140:
@@ -1666,28 +1670,46 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             escaped_snippet = escape_markdown(snippet, version=2)
             escaped_category = escape_markdown(post['category'], version=2)
             
-            # Post card design with clean formatting
-            text += f"📝 *Your Post [{escaped_category}]:*\n"
-            text += f"❝ {escaped_snippet} ❞\n\n"
+            # Format timestamp
+            if isinstance(post['timestamp'], str):
+                timestamp = datetime.strptime(post['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%b %d, %Y')
+            else:
+                timestamp = post['timestamp'].strftime('%b %d, %Y')
             
-            # Add spacing between post cards
-            text += "\\-\n\n"
-        
-        # Remove the last separator if it exists
-        if text.endswith("\\-\n\n"):
-            text = text[:-4]
+            # NEW STRUCTURE: Post with numbering and clean formatting
+            text += f"🅿️ *Post #{post_number}* - {timestamp}\n"
+            text += f"📌 Category: {escaped_category}\n"
+            text += f"📝 {escaped_snippet}\n\n"
+            
+            # Add spacing between posts
+            text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    # Build keyboard with new button layout
+    # Build keyboard with NEW STRUCTURE: Each post gets its own row of buttons
     keyboard = []
     
-    # Add action buttons for each post - NEW CLEAN LAYOUT
-    for post in posts:
-        post_buttons = [
-            InlineKeyboardButton("🔍 View Comments", callback_data=f"viewcomments_{post['post_id']}_1"),
+    for idx, post in enumerate(posts, start=1):
+        # Calculate actual post number
+        post_number = (page - 1) * per_page + idx
+        
+        # Create two separate rows for each post
+        # First row: Post number and view comments
+        keyboard.append([
+            InlineKeyboardButton(f"📝 Post #{post_number}", callback_data=f"viewpost_{post['post_id']}"),
+            InlineKeyboardButton("💬 View Comments", callback_data=f"viewcomments_{post['post_id']}_1")
+        ])
+        
+        # Second row: Continue and Delete buttons
+        keyboard.append([
             InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post['post_id']}"),
             InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
-        ]
-        keyboard.append(post_buttons)
+        ])
+        
+        # Add a small separator row (optional)
+        keyboard.append([InlineKeyboardButton("────────", callback_data="noop")])
+    
+    # Remove the last separator if it exists
+    if keyboard and keyboard[-1][0].text == "────────":
+        keyboard.pop()
     
     # Add pagination with beautiful design
     if total_pages > 1:
@@ -1695,7 +1717,7 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Previous page button (disabled if on first page)
         if page > 1:
-            pagination_row.append(InlineKeyboardButton("⬅️ Previous Page", callback_data=f"my_posts_{page-1}"))
+            pagination_row.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"previous_posts_{page-1}"))
         else:
             # Disabled state for first page
             pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
@@ -1705,18 +1727,14 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         # Next page button (disabled if on last page)
         if page < total_pages:
-            pagination_row.append(InlineKeyboardButton("Next Page ➡️", callback_data=f"my_posts_{page+1}"))
+            pagination_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"previous_posts_{page+1}"))
         else:
             # Disabled state for last page
             pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
         
         keyboard.append(pagination_row)
     
-    # Add navigation buttons
-    keyboard.append([
-        InlineKeyboardButton("💬 My Comments", callback_data='my_comments'),
-        InlineKeyboardButton("📚 Back to My Content", callback_data='my_content_menu')
-    ])
+    # Add main menu button
     keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
     
     try:
@@ -1737,6 +1755,61 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"Error showing previous posts: {e}")
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text("❌ Error loading your posts. Please try again.")
+
+# NEW: Function to view a specific post
+async def view_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id: int):
+    post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
+    
+    if not post:
+        await update.callback_query.answer("❌ Post not found", show_alert=True)
+        return
+    
+    user_id = str(update.effective_user.id)
+    
+    if post['author_id'] != user_id:
+        await update.callback_query.answer("❌ You can only view your own posts", show_alert=True)
+        return
+    
+    # Format the full post
+    escaped_content = escape_markdown(post['content'], version=2)
+    escaped_category = escape_markdown(post['category'], version=2)
+    
+    if isinstance(post['timestamp'], str):
+        timestamp = datetime.strptime(post['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%b %d, %Y at %H:%M')
+    else:
+        timestamp = post['timestamp'].strftime('%b %d, %Y at %H:%M')
+    
+    text = (
+        f"📝 *Your Post Details*\n\n"
+        f"🅿️ *Post ID:* #{post['post_id']}\n"
+        f"📌 *Category:* {escaped_category}\n"
+        f"📅 *Posted on:* {timestamp}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{escaped_content}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    # Buttons for this specific post
+    keyboard = [
+        [
+            InlineKeyboardButton("💬 View Comments", callback_data=f"viewcomments_{post_id}_1"),
+            InlineKeyboardButton("🧵 Continue Post", callback_data=f"continue_post_{post_id}")
+        ],
+        [
+            InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post_id}"),
+            InlineKeyboardButton("🔙 Back to My Posts", callback_data="previous_posts_1")
+        ]
+    ]
+    
+    try:
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+    except Exception as e:
+        logger.error(f"Error viewing post: {e}")
+        await update.callback_query.answer("❌ Error loading post", show_alert=True)
 
 async def show_my_content_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show menu for My Content (Posts and Comments)"""
@@ -2648,7 +2721,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=ForceReply(selective=True),
                 parse_mode=ParseMode.MARKDOWN
             )
-            
+        # Add this in the button_handler function where you handle other callbacks
+        elif query.data.startswith("viewpost_"):
+            post_id = int(query.data.split('_')[1])
+            await view_post(update, context, post_id)    
         elif query.data.startswith('block_user_'):
             target_id = query.data.split('_', 2)[2]
             
