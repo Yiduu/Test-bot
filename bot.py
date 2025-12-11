@@ -1628,6 +1628,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
 
 # UPDATED: Function to show user's previous posts with NEW CLEAN UI
 # UPDATED: Function to show user's previous posts with CHRONOLOGICAL ORDER and NEW STRUCTURE
+# UPDATED: Function to show user's previous posts with CHRONOLOGICAL ORDER and NEW STRUCTURE
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     user_id = str(update.effective_user.id)
     
@@ -1653,36 +1654,62 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("🌟 Share My Thoughts", callback_data='ask')],
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
-    else:
-        # NEW STRUCTURE WITH NUMBERING
-        text = f"📚 *My Previous Posts*\n\n"
         
-        for idx, post in enumerate(posts, start=1):
-            # Calculate actual post number (considering pagination)
-            post_number = (page - 1) * per_page + idx
-            
-            # Create snippet (100-150 characters)
-            snippet = post['content'][:140]
-            if len(post['content']) > 140:
-                snippet += '...'
-            
-            # Escape markdown for snippet
-            escaped_snippet = escape_markdown(snippet, version=2)
-            escaped_category = escape_markdown(post['category'], version=2)
-            
-            # Format timestamp
-            if isinstance(post['timestamp'], str):
-                timestamp = datetime.strptime(post['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%b %d, %Y')
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text(
+                    text,
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.MARKDOWN
+                )
             else:
-                timestamp = post['timestamp'].strftime('%b %d, %Y')
-            
-            # NEW STRUCTURE: Post with numbering and clean formatting
-            text += f"🅿️ *Post #{post_number}* - {timestamp}\n"
-            text += f"📌 Category: {escaped_category}\n"
-            text += f"📝 {escaped_snippet}\n\n"
-            
-            # Add spacing between posts
-            text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                if hasattr(update, 'message') and update.message:
+                    await update.message.reply_text(
+                        text,
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+        except Exception as e:
+            logger.error(f"Error showing previous posts: {e}")
+            if hasattr(update, 'message') and update.message:
+                await update.message.reply_text("❌ Error loading your posts. Please try again.")
+        return
+    
+    # NEW STRUCTURE WITH NUMBERING
+    text = "📚 *My Previous Posts*\n\n"
+    
+    for idx, post in enumerate(posts, start=1):
+        # Calculate actual post number (considering pagination)
+        post_number = (page - 1) * per_page + idx
+        
+        # Create snippet (100-150 characters)
+        snippet = post['content'][:140]
+        if len(post['content']) > 140:
+            snippet += '...'
+        
+        # Escape markdown for snippet
+        escaped_snippet = escape_markdown(snippet, version=2)
+        escaped_category = escape_markdown(post['category'], version=2)
+        
+        # Format timestamp
+        if isinstance(post['timestamp'], str):
+            timestamp = datetime.strptime(post['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%b %d, %Y')
+        else:
+            timestamp = post['timestamp'].strftime('%b %d, %Y')
+        
+        # FIXED: Escape the # character in MarkdownV2
+        # In MarkdownV2, # needs to be escaped: \#
+        post_number_text = f"Post \\#{post_number}"
+        
+        # NEW STRUCTURE: Post with numbering and clean formatting
+        text += f"🅿️ *{post_number_text}* \\- {escape_markdown(timestamp, version=2)}\n"
+        text += f"📌 *Category:* {escaped_category}\n"
+        text += f"📝 {escaped_snippet}\n\n"
+        
+        # Add spacing between posts
+        text += "━━━━━━━━━━━━━━━━━━━━━\n\n"
     
     # Build keyboard with NEW STRUCTURE: Each post gets its own row of buttons
     keyboard = []
@@ -1691,10 +1718,13 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Calculate actual post number
         post_number = (page - 1) * per_page + idx
         
+        # FIXED: Create button text without Markdown formatting
+        post_button_text = f"📝 Post #{post_number}"
+        
         # Create two separate rows for each post
         # First row: Post number and view comments
         keyboard.append([
-            InlineKeyboardButton(f"📝 Post #{post_number}", callback_data=f"viewpost_{post['post_id']}"),
+            InlineKeyboardButton(post_button_text, callback_data=f"viewpost_{post['post_id']}"),
             InlineKeyboardButton("💬 View Comments", callback_data=f"viewcomments_{post['post_id']}_1")
         ])
         
@@ -1704,11 +1734,11 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             InlineKeyboardButton("🗑 Delete Post", callback_data=f"delete_post_{post['post_id']}")
         ])
         
-        # Add a small separator row (optional)
+        # Add a small separator row (optional) - FIXED: Use proper callback data
         keyboard.append([InlineKeyboardButton("────────", callback_data="noop")])
     
     # Remove the last separator if it exists
-    if keyboard and keyboard[-1][0].text == "────────":
+    if keyboard and keyboard[-1][0].callback_data == "noop" and keyboard[-1][0].text == "────────":
         keyboard.pop()
     
     # Add pagination with beautiful design
@@ -1719,7 +1749,7 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         if page > 1:
             pagination_row.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"previous_posts_{page-1}"))
         else:
-            # Disabled state for first page
+            # FIXED: Use "noop" for disabled buttons
             pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
         
         # Current page indicator (centered, non-clickable)
@@ -1729,7 +1759,7 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         if page < total_pages:
             pagination_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"previous_posts_{page+1}"))
         else:
-            # Disabled state for last page
+            # FIXED: Use "noop" for disabled buttons
             pagination_row.append(InlineKeyboardButton("•", callback_data="noop"))
         
         keyboard.append(pagination_row)
@@ -1737,18 +1767,21 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Add main menu button
     keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
     
+    # Create the reply markup
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     try:
         if hasattr(update, 'callback_query') and update.callback_query:
             await update.callback_query.edit_message_text(
                 text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN_V2
             )
         else:
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(
                     text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
     except Exception as e:
@@ -1757,17 +1790,21 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("❌ Error loading your posts. Please try again.")
 
 # NEW: Function to view a specific post
+# NEW: Function to view a specific post in detail
 async def view_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id: int):
+    query = update.callback_query
+    await query.answer()
+    
     post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
     
     if not post:
-        await update.callback_query.answer("❌ Post not found", show_alert=True)
+        await query.answer("❌ Post not found", show_alert=True)
         return
     
     user_id = str(update.effective_user.id)
     
     if post['author_id'] != user_id:
-        await update.callback_query.answer("❌ You can only view your own posts", show_alert=True)
+        await query.answer("❌ You can only view your own posts", show_alert=True)
         return
     
     # Format the full post
@@ -1779,11 +1816,14 @@ async def view_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id:
     else:
         timestamp = post['timestamp'].strftime('%b %d, %Y at %H:%M')
     
+    # FIXED: Escape the # character
+    post_id_text = f"Post ID\\: \\#{post['post_id']}"
+    
     text = (
         f"📝 *Your Post Details*\n\n"
-        f"🅿️ *Post ID:* #{post['post_id']}\n"
-        f"📌 *Category:* {escaped_category}\n"
-        f"📅 *Posted on:* {timestamp}\n\n"
+        f"🅿️ *{post_id_text}*\n"
+        f"📌 *Category\\:* {escaped_category}\n"
+        f"📅 *Posted on\\:* {escape_markdown(timestamp, version=2)}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{escaped_content}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━"
@@ -1801,15 +1841,17 @@ async def view_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id:
         ]
     ]
     
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     try:
-        await update.callback_query.edit_message_text(
+        await query.edit_message_text(
             text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=reply_markup,
             parse_mode=ParseMode.MARKDOWN_V2
         )
     except Exception as e:
         logger.error(f"Error viewing post: {e}")
-        await update.callback_query.answer("❌ Error loading post", show_alert=True)
+        await query.answer("❌ Error loading post", show_alert=True)
 
 async def show_my_content_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show menu for My Content (Posts and Comments)"""
@@ -1987,6 +2029,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(query.from_user.id)
 
     try:
+        # FIXED: Handle noop callback (do nothing for separator buttons)
+        if query.data == 'noop':
+            return  # Do nothing and exit the function
+            
         if query.data == 'ask':
             await query.message.reply_text(
                 "📚 *Choose a category:*",
