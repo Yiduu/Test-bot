@@ -1790,14 +1790,14 @@ async def show_my_comments(update: Update, context: ContextTypes.DEFAULT_TYPE, p
     total_pages = (total_comments + per_page - 1) // per_page
     
     if not comments:
-        text = "💬 *My Comments*\n\nYou haven't made any comments yet."
+        text = "💬 \\*My Comments\\*\n\nYou haven't made any comments yet\\."
         keyboard = [
             [InlineKeyboardButton("📚 Back to My Content", callback_data='my_content_menu')],
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
     else:
-        # Build comments list
-        text = f"💬 *My Comments* ({total_comments} total)\n\n"
+        # Build comments list - Escape all special characters for MarkdownV2
+        text = f"💬 \\*My Comments\\* \\({total_comments} total\\)\n\n"
         
         for idx, comment in enumerate(comments):
             comment_num = (page - 1) * per_page + idx + 1
@@ -1819,9 +1819,12 @@ async def show_my_comments(update: Update, context: ContextTypes.DEFAULT_TYPE, p
                 'photo': '🖼'
             }.get(comment['type'], '💬')
             
-            text += f"**{comment_num}.** {type_emoji} *{comment['category']}*\n"
-            text += f"📄 Post: {escaped_post_preview}\n"
-            text += f"💬 Comment: {escaped_comment_preview}\n\n"
+            # Escape the category
+            escaped_category = escape_markdown(comment['category'], version=2)
+            
+            text += f"\\*\\*{comment_num}\\.\\*\\* {type_emoji} \\*{escaped_category}\\*\n"
+            text += f"📄 Post\\: {escaped_post_preview}\n"
+            text += f"💬 Comment\\: {escaped_comment_preview}\n\n"
             text += "\\-\n\n"
         
         # Remove the last separator if it exists
@@ -1878,6 +1881,24 @@ async def show_my_comments(update: Update, context: ContextTypes.DEFAULT_TYPE, p
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
+    except Exception as e:
+        logger.error(f"Error showing my comments: {e}")
+        # Fallback to plain text if Markdown fails
+        fallback_text = f"My Comments ({total_comments} total)\n\n"
+        for idx, comment in enumerate(comments):
+            comment_num = (page - 1) * per_page + idx + 1
+            post_preview = comment['post_content'][:50] + '...' if len(comment['post_content']) > 50 else comment['post_content']
+            comment_preview = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
+            
+            fallback_text += f"{comment_num}. {comment['category']}\n"
+            fallback_text += f"Post: {post_preview}\n"
+            fallback_text += f"Comment: {comment_preview}\n\n"
+        
+        if hasattr(update, 'message') and update.message:
+            await update.message.reply_text(
+                fallback_text,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     except Exception as e:
         logger.error(f"Error showing my comments: {e}")
         if hasattr(update, 'message') and update.message:
