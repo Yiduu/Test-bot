@@ -1490,9 +1490,11 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{commenter_id}"
 
         # Build author text
+        # Build author text - UPDATED: Italic name with sex emoji first
         author_text = (
-            f"[{escape_markdown(display_name, version=2)}]({profile_link}) "
-            f"{display_sex} {stars}"
+            f"{display_sex} "
+            f"_[{escape_markdown(display_name, version=2)}]({profile_link})_ "
+            f"{stars}"
         )
 
         # Send comment using helper function
@@ -1520,9 +1522,11 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 reply_profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{reply_user_id}"
                 
                 # Build author text for reply
+                # Build author text for reply - UPDATED: Italic name with sex emoji first
                 reply_author_text = (
-                    f"[{escape_markdown(reply_display_name, version=2)}]({reply_profile_link}) "
-                    f"{reply_display_sex} {stars_reply}"
+                    f"{reply_display_sex} "
+                    f"_[{escape_markdown(reply_display_name, version=2)}]({reply_profile_link})_ "
+                    f"{stars_reply}"
                 )
 
                 # Send reply using helper function
