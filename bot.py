@@ -1084,7 +1084,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📌 Sex: {display_sex}\n\n"
                     f"👥 Followers: {len(followers)}\n"
                     f"🌀 *Aura:* {format_aura(rating)} (Level {rating // 10 + 1})\n"
-                    f"⭐️ Contributions: {rating} {stars}\n"
+                    f"⭐️ Contributions: {rating}\n"
                     f"〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️\n"
                     f"_Use /menu to return_",
                     reply_markup=InlineKeyboardMarkup(btn) if btn else None,
