@@ -1044,7 +1044,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 
                 rating = calculate_user_rating(user_data['user_id'])
-                stars = format_stars(rating)
+                
                 current_user_id = user_id
                 btn = []
                 
@@ -1611,7 +1611,7 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
     display_name = get_display_name(user)
     display_sex = get_display_sex(user)
     rating = calculate_user_rating(user_id)
-    stars = format_stars(rating)
+    
     
     followers = db_fetch_all(
         "SELECT * FROM followers WHERE followed_id = %s",
