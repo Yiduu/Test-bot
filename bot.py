@@ -1449,7 +1449,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
     per_page = 5
     offset = (page - 1) * per_page
 
-    # CHANGED: ORDER BY timestamp ASC to show oldest first, newest last
+    # Show oldest first, newest last
     comments = db_fetch_all(
         "SELECT * FROM comments WHERE post_id = %s AND parent_comment_id = 0 ORDER BY timestamp ASC LIMIT %s OFFSET %s",
         (post_id, per_page, offset)
@@ -1458,25 +1458,18 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
     total_comments = count_all_comments(post_id)
     total_pages = (total_comments + per_page - 1) // per_page
 
-    # CHANGED: Only show comments, not post content
-    header = "💬 *Comments*\n\n"
-
+    # REMOVED: Header message
     if not comments and page == 1:
         await context.bot.send_message(
             chat_id=chat_id,
-            text=header + "\\_No comments yet.\\_",
+            text="\\_No comments yet.\\_",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=main_menu
         )
         return
 
-    header_msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=header,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=main_menu
-    )
-    header_message_id = header_msg.message_id
+    # No header message needed
+    header_message_id = None
 
     user_id = str(update.effective_user.id)
     # Store user_id in context for the helper function
@@ -1494,7 +1487,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         rating = calculate_user_rating(commenter_id)
         stars = format_stars(rating)
         
-        # FIXED: Use profileid_ with user_id instead of profile_ with name
         profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{commenter_id}"
 
         # Build author text
@@ -1512,7 +1504,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         async def send_replies_recursive(parent_comment_id, parent_msg_id, depth=1):
             if depth > MAX_REPLY_DEPTH:
                 return
-            # CHANGED: ORDER BY timestamp ASC for replies too
+            # Show replies in chronological order too
             children = db_fetch_all(
                 "SELECT * FROM comments WHERE parent_comment_id = %s ORDER BY timestamp ASC",
                 (parent_comment_id,)
@@ -1525,7 +1517,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
                 rating_reply = calculate_user_rating(reply_user_id)
                 stars_reply = format_stars(rating_reply)
                 
-                # FIXED: Use profileid_ with user_id for replies too
                 reply_profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{reply_user_id}"
                 
                 # Build author text for reply
@@ -1543,8 +1534,7 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         # Start recursion for this top-level comment
         await send_replies_recursive(comment['comment_id'], msg_id, depth=1)
 
-    # Update pagination buttons to reflect chronological order
-    # When viewing chronological order, "Previous" goes to older comments, "Next" to newer ones
+    # Pagination buttons
     pagination_buttons = []
     if page > 1:
         pagination_buttons.append(InlineKeyboardButton("⬅️ Older Comments", callback_data=f"viewcomments_{post_id}_{page-1}"))
@@ -1556,7 +1546,6 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             chat_id=chat_id,
             text=f"📄 Page {page}/{total_pages} (Oldest to Newest)",
             reply_markup=pagination_markup,
-            reply_to_message_id=header_message_id,
             disable_web_page_preview=True
         )
 
