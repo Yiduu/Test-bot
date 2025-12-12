@@ -130,6 +130,27 @@ def init_db():
                 )
                 ''')
 
+                # ---------------- Database Schema Migration ----------------
+                # Check if thread_from_post_id column exists, if not add it
+                c.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='posts' AND column_name='thread_from_post_id'
+                """)
+                if not c.fetchone():
+                    logger.info("Adding missing column: thread_from_post_id to posts table")
+                    c.execute("ALTER TABLE posts ADD COLUMN thread_from_post_id BIGINT DEFAULT NULL")
+                
+                # Add other missing columns if needed in the future
+                # Example for future migrations:
+                # c.execute("""
+                #     SELECT column_name 
+                #     FROM information_schema.columns 
+                #     WHERE table_name='users' AND column_name='new_column'
+                # """)
+                # if not c.fetchone():
+                #     c.execute("ALTER TABLE users ADD COLUMN new_column TEXT DEFAULT NULL")
+
                 # ---------------- Create admin user if specified ----------------
                 if ADMIN_ID:
                     c.execute('''
@@ -1283,29 +1304,55 @@ async def show_messages(update: Update, context: ContextTypes.DEFAULT_TYPE, page
             await update.message.reply_text("❌ Error loading messages. Please try again.")
 
 async def show_comments_menu(update, context, post_id, page=1):
+    """Menu to view comments - clears previous display and starts fresh"""
     post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
     if not post:
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text("❌ Post not found.", reply_markup=main_menu)
         return
-
-    comment_count = count_all_comments(post_id)
-    keyboard = [
-        [
-            InlineKeyboardButton(f"👁 View Comments ({comment_count})", callback_data=f"viewcomments_{post_id}_{page}"),
-            InlineKeyboardButton("✍️ Write Comment", callback_data=f"writecomment_{post_id}")
-        ]
-    ]
-
-    post_text = post['content']
-    escaped_text = escape_markdown(post_text, version=2)
-
-    if hasattr(update, 'message') and update.message:
-        await update.message.reply_text(
-            f"💬\n{escaped_text}",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
+    
+    # Clear any previous display data
+    if 'comments_display' in context.chat_data:
+        # Clean up old messages by editing them to show they're outdated
+        try:
+            display_data = context.chat_data['comments_display']
+            
+            # Edit header to show it's no longer active
+            if display_data.get('header_msg_id'):
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=update.effective_chat.id,
+                        message_id=display_data['header_msg_id'],
+                        text="📄 _Previous comments view (outdated)_",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except:
+                    pass
+            
+            # Edit pagination to show it's no longer active
+            if display_data.get('pagination_msg_id'):
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=update.effective_chat.id,
+                        message_id=display_data['pagination_msg_id'],
+                        text="📄 _Previous navigation (outdated)_",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except:
+                    pass
+        except Exception as e:
+            logger.error(f"Error cleaning up previous display: {e}")
+    
+    # Start fresh display
+    context.chat_data['comments_display'] = {
+        'post_id': post_id,
+        'page': page,
+        'header_msg_id': None,
+        'pagination_msg_id': None,
+        'comment_msgs': {}
+    }
+    
+    await show_comments_page(update, context, post_id, page)
 
 async def send_comment_message(context, chat_id, comment, author_text, reply_to_message_id=None):
     """Helper function to send comments with proper media handling"""
@@ -1443,50 +1490,232 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             disable_web_page_preview=True
         )
         return msg.message_id
+async def edit_comment_message(context, chat_id, message_id, comment, author_text):
+    """Edit an existing comment message"""
+    comment_id = comment['comment_id']
+    comment_type = comment['type']
+    file_id = comment['file_id']
+    content = comment['content']
+    
+    user_id = str(context._user_id) if hasattr(context, '_user_id') else None
+    user_reaction = None
+    if user_id:
+        user_reaction = db_fetch_one(
+            "SELECT type FROM reactions WHERE comment_id = %s AND user_id = %s",
+            (comment_id, user_id)
+        )
+    
+    # Get reaction counts
+    likes_row = db_fetch_one(
+        "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'like'",
+        (comment_id,)
+    )
+    likes = likes_row['cnt'] if likes_row else 0
+    
+    dislikes_row = db_fetch_one(
+        "SELECT COUNT(*) as cnt FROM reactions WHERE comment_id = %s AND type = 'dislike'",
+        (comment_id,)
+    )
+    dislikes = dislikes_row['cnt'] if dislikes_row else 0
 
-async def show_comments_page(update, context, post_id, page=1, reply_pages=None):
+    like_emoji = "👍" if user_reaction and user_reaction['type'] == 'like' else "👍"
+    dislike_emoji = "👎" if user_reaction and user_reaction['type'] == 'dislike' else "👎"
+
+    # Build keyboard
+    kb_buttons = [
+        [
+            InlineKeyboardButton(f"{like_emoji} {likes}", callback_data=f"likecomment_{comment_id}"),
+            InlineKeyboardButton(f"{dislike_emoji} {dislikes}", callback_data=f"dislikecomment_{comment_id}"),
+            InlineKeyboardButton("Reply", callback_data=f"reply_{comment['post_id']}_{comment_id}")
+        ]
+    ]
+    
+    # Add edit/delete buttons only for comment author
+    if comment['author_id'] == user_id:
+        if comment_type == 'text':
+            kb_buttons.append([
+                InlineKeyboardButton("✏️ Edit", callback_data=f"edit_comment_{comment_id}"),
+                InlineKeyboardButton("🗑 Delete", callback_data=f"delete_comment_{comment_id}")
+            ])
+        else:
+            kb_buttons.append([
+                InlineKeyboardButton("🗑 Delete", callback_data=f"delete_comment_{comment_id}")
+            ])
+    
+    kb = InlineKeyboardMarkup(kb_buttons)
+    
+    # Edit message based on comment type
+    try:
+        if comment_type == 'text':
+            message_text = f"{escape_markdown(content, version=2)}\n\n{author_text}"
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=message_text,
+                reply_markup=kb,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                disable_web_page_preview=True
+            )
+        elif comment_type in ['voice', 'gif']:
+            caption = f"{author_text}" if content else author_text
+            if comment_type == 'voice':
+                await context.bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=caption,
+                    reply_markup=kb,
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+            else:  # gif
+                await context.bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=caption,
+                    reply_markup=kb,
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+        # Note: Stickers and photos can't be edited after sending
+        # For these types, we send a new message and delete the old one
+        else:
+            # Delete old message and send new one
+            await context.bot.delete_message(chat_id, message_id)
+            # Return None to indicate new message needed
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error editing comment message {comment_id}: {e}")
+        # Return None to indicate editing failed
+        return None
+    
+    return message_id
+
+async def update_replies_for_comment(context, chat_id, parent_comment_id, display_data):
+    """Update replies for a comment"""
+    replies = db_fetch_all(
+        "SELECT * FROM comments WHERE parent_comment_id = %s ORDER BY timestamp ASC",
+        (parent_comment_id,)
+    )
+    
+    for reply in replies:
+        reply_user_id = reply['author_id']
+        reply_user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (reply_user_id,))
+        reply_display_name = get_display_name(reply_user)
+        reply_display_sex = get_display_sex(reply_user)
+        rating_reply = calculate_user_rating(reply_user_id)
+        
+        reply_profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{reply_user_id}"
+        
+        reply_author_text = (
+            f"{reply_display_sex} "
+            f"_[{escape_markdown(reply_display_name, version=2)}]({reply_profile_link})_ "
+            f"〰️ _Aura_ {rating_reply} {format_aura(rating_reply)}"
+        )
+        
+        # Check if reply message exists
+        reply_key = f"reply_{reply['comment_id']}"
+        if reply_key in display_data['comment_msgs']:
+            # Edit existing reply
+            msg_id = display_data['comment_msgs'][reply_key]
+            try:
+                await edit_comment_message(context, chat_id, msg_id, reply, reply_author_text)
+            except Exception as e:
+                logger.error(f"Error editing reply {reply['comment_id']}: {e}")
+        else:
+            # Get parent message ID for reply chain
+            parent_msg_id = display_data['comment_msgs'].get(str(parent_comment_id))
+            if parent_msg_id:
+                # Send new reply
+                msg_id = await send_comment_message(context, chat_id, reply, reply_author_text, parent_msg_id)
+                if msg_id:
+                    display_data['comment_msgs'][reply_key] = msg_id
+
+async def show_comments_page(update, context, post_id, page=1):
+    """Show comments with pagination using message editing (no deletion)"""
+    
     if update.effective_chat is None:
         logger.error("Cannot determine chat from update: %s", update)
         return
+    
     chat_id = update.effective_chat.id
+    user_id = str(update.effective_user.id)
 
     post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
     if not post:
         await context.bot.send_message(chat_id, "❌ Post not found.", reply_markup=main_menu)
         return
 
-    per_page = 5
+    per_page = 5  # Number of top-level comments per page
     offset = (page - 1) * per_page
 
-    # Show oldest first, newest last
+    # Get top-level comments for this page
     comments = db_fetch_all(
         "SELECT * FROM comments WHERE post_id = %s AND parent_comment_id = 0 ORDER BY timestamp ASC LIMIT %s OFFSET %s",
         (post_id, per_page, offset)
     )
 
-    total_comments = count_all_comments(post_id)
-    total_pages = (total_comments + per_page - 1) // per_page
+    # Count total top-level comments for pagination
+    top_level_comments_row = db_fetch_one(
+        "SELECT COUNT(*) as count FROM comments WHERE post_id = %s AND parent_comment_id = 0",
+        (post_id,)
+    )
+    total_top_level = top_level_comments_row['count'] if top_level_comments_row else 0
+    total_pages = max(1, (total_top_level + per_page - 1) // per_page)
 
-    # REMOVED: Header message
+    # Initialize message tracking in context
+    if 'comments_display' not in context.chat_data:
+        context.chat_data['comments_display'] = {
+            'post_id': post_id,
+            'page': page,
+            'header_msg_id': None,
+            'pagination_msg_id': None,
+            'comment_msgs': {}  # comment_id -> message_id
+        }
+    
+    display_data = context.chat_data['comments_display']
+    display_data['post_id'] = post_id
+    display_data['page'] = page
+
+    # Send or update header message
+    post_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
+    escaped_preview = escape_markdown(post_preview, version=2)
+    
+    header_text = f"💬 *Comments for Post*\n\n📝 {escaped_preview}\n\n"
+    
     if not comments and page == 1:
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="\\_No comments yet.\\_",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=main_menu
-        )
+        header_text += "\\_No comments yet. Be the first to comment!\\_"
+    elif not comments:
+        header_text += "\\_No more comments.\\_"
+    
+    # Send or edit header message
+    try:
+        if display_data['header_msg_id']:
+            # Edit existing header
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=display_data['header_msg_id'],
+                text=header_text,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                disable_web_page_preview=True
+            )
+        else:
+            # Send new header
+            header_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=header_text,
+                parse_mode=ParseMode.MARKDOWN_V2,
+                disable_web_page_preview=True
+            )
+            display_data['header_msg_id'] = header_msg.message_id
+    except Exception as e:
+        logger.error(f"Error with header message: {e}")
         return
 
-    # No header message needed
-    header_message_id = None
-
-    user_id = str(update.effective_user.id)
-    # Store user_id in context for the helper function
+    # Store user_id in context for helper function
     context._user_id = user_id
 
-    if reply_pages is None:
-        reply_pages = {}
-
+    # Send or update comments
+    current_comment_ids = []
+    
     for idx, comment in enumerate(comments):
         commenter_id = comment['author_id']
         commenter = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (commenter_id,))
@@ -1494,75 +1723,95 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         display_name = get_display_name(commenter)
         
         rating = calculate_user_rating(commenter_id)
-        
-        
         profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{commenter_id}"
 
         # Build author text
-        # Build author text - UPDATED: Italic name with sex emoji first
-        # Build author text - UPDATED: Italic name with sex emoji first, then zigzag separator, then italic "Aura", points and aura
         author_text = (
             f"{display_sex} "
             f"_[{escape_markdown(display_name, version=2)}]({profile_link})_ "
             f"〰️ _Aura_ {rating} {format_aura(rating)}"
         )
+        
+        # Check if we already have a message for this comment
+        if str(comment['comment_id']) in display_data['comment_msgs']:
+            # Edit existing comment message
+            msg_id = display_data['comment_msgs'][str(comment['comment_id'])]
+            try:
+                await edit_comment_message(context, chat_id, msg_id, comment, author_text)
+                current_comment_ids.append(str(comment['comment_id']))
+                continue
+            except Exception as e:
+                logger.error(f"Error editing comment {comment['comment_id']}: {e}")
+                # Fall through to send new message
+        
+        # Send new comment message
+        msg_id = await send_comment_message(context, chat_id, comment, author_text, display_data['header_msg_id'])
+        if msg_id:
+            display_data['comment_msgs'][str(comment['comment_id'])] = msg_id
+            current_comment_ids.append(str(comment['comment_id']))
 
-        # Send comment using helper function
-        msg_id = await send_comment_message(context, chat_id, comment, author_text, header_message_id)
+        # Send or update replies for this comment
+        await update_replies_for_comment(context, chat_id, comment['comment_id'], display_data)
 
-        # Recursive function to display replies under this comment
-        MAX_REPLY_DEPTH = 6  # avoid infinite nesting
+    # Remove messages for comments that are no longer on this page
+    for comment_id in list(display_data['comment_msgs'].keys()):
+        if comment_id not in current_comment_ids:
+            try:
+                msg_id = display_data['comment_msgs'][comment_id]
+                await context.bot.delete_message(chat_id, msg_id)
+                del display_data['comment_msgs'][comment_id]
+            except Exception as e:
+                logger.error(f"Error removing old comment message: {e}")
 
-        async def send_replies_recursive(parent_comment_id, parent_msg_id, depth=1):
-            if depth > MAX_REPLY_DEPTH:
-                return
-            # Show replies in chronological order too
-            children = db_fetch_all(
-                "SELECT * FROM comments WHERE parent_comment_id = %s ORDER BY timestamp ASC",
-                (parent_comment_id,)
-            )
-            for child in children:
-                reply_user_id = child['author_id']
-                reply_user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (reply_user_id,))
-                reply_display_name = get_display_name(reply_user)
-                reply_display_sex = get_display_sex(reply_user)
-                rating_reply = calculate_user_rating(reply_user_id)
-                
-                
-                reply_profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{reply_user_id}"
-                
-                # Build author text for reply
-                # Build author text for reply - UPDATED: Italic name with sex emoji first
-                # Build author text for reply - UPDATED: Italic name with sex emoji first, then zigzag separator, then italic "Aura", points and aura
-                reply_author_text = (
-                    f"{reply_display_sex} "
-                    f"_[{escape_markdown(reply_display_name, version=2)}]({reply_profile_link})_ "
-                    f"〰️ _Aura_ {rating_reply} {format_aura(rating_reply)}"
-                )
-
-                # Send reply using helper function
-                child_msg_id = await send_comment_message(context, chat_id, child, reply_author_text, parent_msg_id)
-
-                # Recursively show this child's own replies
-                await send_replies_recursive(child['comment_id'], child_msg_id, depth + 1)
-
-        # Start recursion for this top-level comment
-        await send_replies_recursive(comment['comment_id'], msg_id, depth=1)
-
-    # Pagination buttons
+    # Update pagination message
+    pagination_text = f"📄 *Page {page}/{total_pages}*\n\n"
+    
+    # Build pagination keyboard
     pagination_buttons = []
+    
     if page > 1:
-        pagination_buttons.append(InlineKeyboardButton("⬅️ Older Comments", callback_data=f"viewcomments_{post_id}_{page-1}"))
+        pagination_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"viewcomments_{post_id}_{page-1}"))
+    
+    pagination_buttons.append(InlineKeyboardButton("✍️ Write Comment", callback_data=f"writecomment_{post_id}"))
+    
     if page < total_pages:
-        pagination_buttons.append(InlineKeyboardButton("Newer Comments ➡️", callback_data=f"viewcomments_{post_id}_{page+1}"))
+        pagination_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"viewcomments_{post_id}_{page+1}"))
+    
+    navigation_buttons = [
+        InlineKeyboardButton("📝 View Post", callback_data=f"viewpost_{post_id}"),
+        InlineKeyboardButton("📱 Main Menu", callback_data='menu')
+    ]
+    
+    keyboard = []
     if pagination_buttons:
-        pagination_markup = InlineKeyboardMarkup([pagination_buttons])
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"📄 Page {page}/{total_pages} (Oldest to Newest)",
-            reply_markup=pagination_markup,
-            disable_web_page_preview=True
-        )
+        keyboard.append(pagination_buttons)
+    keyboard.append(navigation_buttons)
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send or edit pagination message
+    try:
+        if display_data['pagination_msg_id']:
+            # Edit existing pagination message
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=display_data['pagination_msg_id'],
+                text=pagination_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            # Send new pagination message
+            pagination_msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=pagination_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_to_message_id=display_data['header_msg_id']
+            )
+            display_data['pagination_msg_id'] = pagination_msg.message_id
+    except Exception as e:
+        logger.error(f"Error with pagination message: {e}")
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -2199,7 +2448,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if len(parts) >= 3 and parts[1].isdigit() and parts[2].isdigit():
                     post_id = int(parts[1])
                     page = int(parts[2])
-                    await show_comments_page(update, context, post_id, page)
+                    
+                    # Check if we're already viewing this post
+                    if ('comments_display' in context.chat_data and 
+                        context.chat_data['comments_display']['post_id'] == post_id):
+                        # We're already viewing this post, just change page
+                        await show_comments_page(update, context, post_id, page)
+                    else:
+                        # New post, start fresh
+                        await show_comments_menu(update, context, post_id, page)
             except Exception as e:
                 logger.error(f"ViewComments error: {e}")
                 await query.answer("❌ Error loading comments")
