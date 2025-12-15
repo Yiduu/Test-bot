@@ -1667,6 +1667,17 @@ async def send_updated_profile(user_id: str, chat_id: int, context: ContextTypes
 # UPDATED: Function to show user's previous posts with CHRONOLOGICAL ORDER and NEW STRUCTURE
 async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     """Show user's previous posts as clickable snippets - NEW IMPROVED UI"""
+    
+    # Show loading message
+    loading_msg = None
+    try:
+        if hasattr(update, 'callback_query') and update.callback_query:
+            loading_msg = await update.callback_query.message.edit_text("⏳ Loading your posts...")
+        elif hasattr(update, 'message') and update.message:
+            loading_msg = await update.message.reply_text("⏳ Loading your posts...")
+    except:
+        pass
+    
     user_id = str(update.effective_user.id)
     
     per_page = 8  # Show 8 posts per page
@@ -1686,6 +1697,13 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
     total_pages = (total_posts + per_page - 1) // per_page
     
     if not posts:
+        # Delete loading message and show empty state
+        if loading_msg:
+            try:
+                await loading_msg.delete()
+            except:
+                pass
+        
         text = "📝 *My Posts*\n\nYou haven't posted anything yet or your posts are pending approval."
         keyboard = [
             [InlineKeyboardButton("🌟 Share My Thoughts", callback_data='ask')],
@@ -1697,7 +1715,7 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         try:
             if hasattr(update, 'callback_query') and update.callback_query:
-                await update.callback_query.edit_message_text(
+                await update.callback_query.message.edit_text(
                     text,
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
@@ -1777,20 +1795,30 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Create the reply markup
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Replace loading message with content
     try:
-        if hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.edit_message_text(
+        if loading_msg:
+            # Try to edit the loading message
+            await loading_msg.edit_text(
                 text,
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN
             )
         else:
-            if hasattr(update, 'message') and update.message:
-                await update.message.reply_text(
+            # Or create new message
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.message.edit_text(
                     text,
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN
                 )
+            else:
+                if hasattr(update, 'message') and update.message:
+                    await update.message.reply_text(
+                        text,
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.MARKDOWN
+                    )
     except Exception as e:
         logger.error(f"Error showing previous posts: {e}")
         if hasattr(update, 'message') and update.message:
