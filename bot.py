@@ -378,6 +378,17 @@ async def update_channel_post_comment_count(context: ContextTypes.DEFAULT_TYPE, 
         logger.error(f"Error updating channel post comment count: {e}")
 
 async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    # Show loading message
+    loading_msg = None
+    try:
+        if update.message:
+            loading_msg = await update.message.reply_text("⏳ Loading leaderboard...")
+        elif update.callback_query:
+            loading_msg = await update.callback_query.message.edit_text("⏳ Loading leaderboard...")
+    except:
+        pass
+    
     top_users = db_fetch_all('''
         SELECT user_id, anonymous_name, sex,
                (SELECT COUNT(*) FROM posts WHERE author_id = users.user_id AND approved = TRUE) + 
@@ -412,25 +423,48 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("👤 My Profile", callback_data='profile')]
     ]
     
-    if update.message:
-        await update.message.reply_text(
-            leaderboard_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.MARKDOWN
-        )
-    elif update.callback_query:
-        try:
-            await update.callback_query.edit_message_text(
-                leaderboard_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode=ParseMode.MARKDOWN
-            )
-        except BadRequest:
-            await update.callback_query.message.reply_text(
-                leaderboard_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode=ParseMode.MARKDOWN
-            )
+    # Replace loading message with content
+    try:
+        if loading_msg:
+            if update.message:
+                await loading_msg.edit_text(
+                    leaderboard_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            elif update.callback_query:
+                await loading_msg.edit_text(
+                    leaderboard_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+        else:
+            if update.message:
+                await update.message.reply_text(
+                    leaderboard_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            elif update.callback_query:
+                try:
+                    await update.callback_query.edit_message_text(
+                        leaderboard_text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except BadRequest:
+                    await update.callback_query.message.reply_text(
+                        leaderboard_text,
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+    except Exception as e:
+        logger.error(f"Error showing leaderboard: {e}")
+        if loading_msg:
+            try:
+                await loading_msg.edit_text("❌ Error loading leaderboard. Please try again.")
+            except:
+                pass
 
 async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -1471,8 +1505,26 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         return
     chat_id = update.effective_chat.id
 
+    # Show loading message (only for first page)
+    loading_msg = None
+    if page == 1 and reply_pages is None:
+        try:
+            if hasattr(update, 'callback_query') and update.callback_query:
+                loading_msg = await update.callback_query.message.edit_text("⏳ Loading comments...")
+            elif hasattr(update, 'message') and update.message:
+                loading_msg = await context.bot.send_message(chat_id, "⏳ Loading comments...")
+        except:
+            loading_msg = None
+
     post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
     if not post:
+        # Delete loading if exists
+        if loading_msg:
+            try:
+                await loading_msg.delete()
+            except:
+                pass
+        
         await context.bot.send_message(chat_id, "❌ Post not found.", reply_markup=main_menu)
         return
 
@@ -1570,6 +1622,14 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
         # Start recursion for this top-level comment
         await send_replies_recursive(comment['comment_id'], msg_id, depth=1)
 
+    # Pagination buttons
+        # Delete loading message if it exists
+    if loading_msg:
+        try:
+            await loading_msg.delete()
+        except:
+            pass
+    
     # Pagination buttons
     pagination_buttons = []
     if page > 1:
@@ -1829,6 +1889,15 @@ async def show_previous_posts(update: Update, context: ContextTypes.DEFAULT_TYPE
 # NEW: Function to show menu for My Content
 async def show_my_content_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show menu for My Content (Posts and Comments)"""
+    
+    # Show quick loading (very fast)
+    loading_msg = None
+    try:
+        if hasattr(update, 'callback_query') and update.callback_query:
+            loading_msg = await update.callback_query.message.edit_text("⏳ Loading menu...")
+    except:
+        pass
+    
     keyboard = [
         [InlineKeyboardButton("📝 My Posts", callback_data='my_posts_1')],
         [InlineKeyboardButton("💬 My Comments", callback_data='my_comments_1')],
@@ -1838,8 +1907,14 @@ async def show_my_content_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     text = "📚 *My Content*\n\nChoose what you want to view:"
     
     try:
-        if hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.edit_message_text(
+        if loading_msg:
+            await loading_msg.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        elif hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.message.edit_text(
                 text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode=ParseMode.MARKDOWN
@@ -1862,18 +1937,36 @@ async def view_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id:
     query = update.callback_query
     await query.answer()
     
+    # Show loading
+    try:
+        loading_msg = await query.message.edit_text("⏳ Loading post details...")
+    except:
+        loading_msg = None
+    
     # Get post details
     post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
     
     if not post:
-        await query.answer("❌ Post not found", show_alert=True)
+        if loading_msg:
+            try:
+                await loading_msg.edit_text("❌ Post not found", parse_mode=ParseMode.MARKDOWN)
+            except:
+                await query.message.edit_text("❌ Post not found")
+        else:
+            await query.answer("❌ Post not found", show_alert=True)
         return
     
     user_id = str(update.effective_user.id)
     
     # Verify ownership
     if post['author_id'] != user_id:
-        await query.answer("❌ You can only view your own posts", show_alert=True)
+        if loading_msg:
+            try:
+                await loading_msg.edit_text("❌ You can only view your own posts", parse_mode=ParseMode.MARKDOWN)
+            except:
+                await query.message.edit_text("❌ You can only view your own posts")
+        else:
+            await query.answer("❌ You can only view your own posts", show_alert=True)
         return
     
     # Format the post content
@@ -1922,18 +2015,43 @@ async def view_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id:
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
-        await query.edit_message_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
+        if loading_msg:
+            # Edit the loading message
+            await loading_msg.edit_text(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+        else:
+            # Edit original message
+            await query.message.edit_text(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
     except Exception as e:
         logger.error(f"Error viewing post: {e}")
+        if loading_msg:
+            try:
+                await loading_msg.edit_text("❌ Error loading post")
+            except:
+                pass
         await query.answer("❌ Error loading post", show_alert=True)
 
 # NEW: Function to show user's comments
 async def show_my_comments(update: Update, context: ContextTypes.DEFAULT_TYPE, page=1):
     """Show user's previous comments with pagination"""
+    
+    # Show loading message
+    loading_msg = None
+    try:
+        if hasattr(update, 'callback_query') and update.callback_query:
+            loading_msg = await update.callback_query.message.edit_text("⏳ Loading your comments...")
+        elif hasattr(update, 'message') and update.message:
+            loading_msg = await update.message.reply_text("⏳ Loading your comments...")
+    except:
+        pass
+    
     user_id = str(update.effective_user.id)
     
     per_page = 10
@@ -1957,11 +2075,20 @@ async def show_my_comments(update: Update, context: ContextTypes.DEFAULT_TYPE, p
     total_pages = (total_comments + per_page - 1) // per_page
     
     if not comments:
+        # Delete loading message and show empty state
+        if loading_msg:
+            try:
+                await loading_msg.delete()
+            except:
+                pass
+        
         text = "💬 \\*My Comments\\*\n\nYou haven't made any comments yet\\."
         keyboard = [
             [InlineKeyboardButton("📚 Back to My Content", callback_data='my_content_menu')],
             [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
         ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
     else:
         text = f"💬 \\*My Comments\\* \\(Page {page}/{total_pages}\\)\n\n"
         
@@ -2001,23 +2128,33 @@ async def show_my_comments(update: Update, context: ContextTypes.DEFAULT_TYPE, p
             InlineKeyboardButton("📚 Back to My Content", callback_data='my_content_menu')
         ])
         keyboard.append([InlineKeyboardButton("📱 Main Menu", callback_data='menu')])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
+    # Replace loading message with content
     try:
-        if hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.edit_message_text(
+        if loading_msg:
+            # Try to edit the loading message
+            await loading_msg.edit_text(
                 text,
                 reply_markup=reply_markup,
                 parse_mode=ParseMode.MARKDOWN_V2
             )
         else:
-            if hasattr(update, 'message') and update.message:
-                await update.message.reply_text(
+            # Or create new message
+            if hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.message.edit_text(
                     text,
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
+            else:
+                if hasattr(update, 'message') and update.message:
+                    await update.message.reply_text(
+                        text,
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
     except Exception as e:
         logger.error(f"Error showing my comments: {e}")
         if hasattr(update, 'message') and update.message:
