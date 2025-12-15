@@ -2519,7 +2519,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await show_previous_posts(update, context, 1)
 
         # UPDATED: Handle Previous Posts button
-                elif query.data == 'my_content_menu':
+        elif query.data == 'my_content_menu':
             await show_my_content_menu(update, context)
 
         elif query.data.startswith("my_posts_"):
