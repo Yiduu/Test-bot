@@ -2379,7 +2379,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("❌ You can only delete your own comments", show_alert=True)
 
         # NEW: Handle delete post
-                elif query.data.startswith("delete_post_"):
+        elif query.data.startswith("delete_post_"):
             try:
                 parts = query.data.split('_')
                 post_id = int(parts[2])
