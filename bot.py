@@ -383,12 +383,13 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loading_msg = None
     try:
         if update.message:
-            loading_msg = await update.message.reply_text("⏳ Loading leaderboard...")
+            loading_msg = await update.message.reply_text("🏆 Loading leaderboard...")
         elif update.callback_query:
-            loading_msg = await update.callback_query.message.edit_text("⏳ Loading leaderboard...")
+            loading_msg = await update.callback_query.message.edit_text("🏆 Loading leaderboard...")
     except:
         pass
     
+    # Get top 10 users
     top_users = db_fetch_all('''
         SELECT user_id, anonymous_name, sex,
                (SELECT COUNT(*) FROM posts WHERE author_id = users.user_id AND approved = TRUE) + 
@@ -398,30 +399,51 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LIMIT 10
     ''')
     
-    leaderboard_text = "🏆 *Top Contributors* 🏆\n\n"
+    # Create minimalist header
+    leaderboard_text = "*🏆 Christian Vent Leaderboard*\n\n"
+    
+    # Format each user
     for idx, user in enumerate(top_users, start=1):
         aura = format_aura(user['total'])
+        profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{user['user_id']}"
+        
+        # Create minimalist line
+        if idx <= 3:
+            medals = ["🥇", "🥈", "🥉"]
+            rank_prefix = medals[idx-1]
+        else:
+            rank_prefix = f"{idx}."
+        
         leaderboard_text += (
-            f"{idx}. {user['anonymous_name']} {user['sex']} - {user['total']} contributions {aura}\n"
+            f"{rank_prefix} {user['sex']} "
+            f"[{user['anonymous_name']}]({profile_link})\n"
+            f"   {user['total']} pts {aura}\n\n"
         )
     
+    # Add current user's rank
     user_id = str(update.effective_user.id)
     user_rank = get_user_rank(user_id)
     
-    if user_rank and user_rank > 10:
+    if user_rank:
         user_data = db_fetch_one("SELECT anonymous_name, sex FROM users WHERE user_id = %s", (user_id,))
         if user_data:
             user_contributions = calculate_user_rating(user_id)
             aura = format_aura(user_contributions)
-            leaderboard_text += (
-                f"\n...\n"
-                f"{user_rank}. {user_data['anonymous_name']} {user_data['sex']} - {user_contributions} contributions {aura}\n"
-            )
+            profile_link = f"https://t.me/{BOT_USERNAME}?start=profileid_{user_id}"
+            
+            leaderboard_text += f"*Your position:* {user_rank}\n"
+            leaderboard_text += f"{user_data['sex']} {user_data['anonymous_name']} • {user_contributions} pts {aura}\n\n"
     
+    # Add subtle footer
+    leaderboard_text += "_Click names to view profiles • Updated daily_"
+    
+    # Create clean buttons
     keyboard = [
-        [InlineKeyboardButton("📱 Main Menu", callback_data='menu')],
+        [InlineKeyboardButton("📱 Menu", callback_data='menu')],
         [InlineKeyboardButton("👤 My Profile", callback_data='profile')]
     ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Replace loading message with content
     try:
@@ -429,34 +451,39 @@ async def show_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if update.message:
                 await loading_msg.edit_text(
                     leaderboard_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.MARKDOWN,
+                    disable_web_page_preview=True
                 )
             elif update.callback_query:
                 await loading_msg.edit_text(
                     leaderboard_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.MARKDOWN,
+                    disable_web_page_preview=True
                 )
         else:
             if update.message:
                 await update.message.reply_text(
                     leaderboard_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN
+                    reply_markup=reply_markup,
+                    parse_mode=ParseMode.MARKDOWN,
+                    disable_web_page_preview=True
                 )
             elif update.callback_query:
                 try:
                     await update.callback_query.edit_message_text(
                         leaderboard_text,
-                        reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode=ParseMode.MARKDOWN
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.MARKDOWN,
+                        disable_web_page_preview=True
                     )
                 except BadRequest:
                     await update.callback_query.message.reply_text(
                         leaderboard_text,
-                        reply_markup=InlineKeyboardMarkup(keyboard),
-                        parse_mode=ParseMode.MARKDOWN
+                        reply_markup=reply_markup,
+                        parse_mode=ParseMode.MARKDOWN,
+                        disable_web_page_preview=True
                     )
     except Exception as e:
         logger.error(f"Error showing leaderboard: {e}")
