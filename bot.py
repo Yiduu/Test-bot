@@ -2812,8 +2812,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except (IndexError, ValueError):
                 await show_my_comments(update, context, 1)
         
-                elif query.data == 'my_comments':
-                    await show_my_comments(update, context, 1)
+        elif query.data == 'my_comments':
+            await show_my_comments(update, context, 1)
 
         # NEW: Handle My Content Menu
         elif query.data == 'my_content_menu':
