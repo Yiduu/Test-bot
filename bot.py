@@ -2795,7 +2795,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.answer("✅ Comment cancelled")
             await query.message.edit_text(
-                "❌ *Comment cancelled*\n\nYou can write a new comment or use other buttons.",
+                "❌ *Comment cancelled*\n\nYou can write a new comment or use other buttons\\.",
                 parse_mode=ParseMode.MARKDOWN
             )
         
@@ -2814,7 +2814,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await query.answer("✅ Reply cancelled")
                 await query.message.edit_text(
-                    "❌ *Reply cancelled*\n\nYou can write a new reply or use other buttons.",
+                    "❌ *Reply cancelled*\n\nYou can write a new reply or use other buttons\\.",
                     parse_mode=ParseMode.MARKDOWN
                 )
 
