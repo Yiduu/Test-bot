@@ -3083,37 +3083,78 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_messages(update, context, page)
             
         elif query.data.startswith('message_'):
-            target_id = query.data.split('_', 1)[1]
-            db_execute(
-                "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
-                (target_id, user_id)
-            )
-            
-            target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id,))
-            target_name = target_user['anonymous_name'] if target_user else "this user"
-            
-            await query.message.reply_text(
-                f"✉️ *Composing message to {target_name}*\n\nPlease type your message:",
-                reply_markup=ForceReply(selective=True),
-                parse_mode=ParseMode.MARKDOWN
-            )
+            try:
+                # Extract target_id from callback data
+                parts = query.data.split('_')
+                if len(parts) < 2:
+                    await query.answer("❌ Invalid message format", show_alert=True)
+                    return
+                
+                target_id = parts[1]  # Get the user ID after 'message_'
+                
+                if not target_id or not target_id.strip():
+                    await query.answer("❌ Invalid user ID", show_alert=True)
+                    return
+                
+                # Update user state
+                success = db_execute(
+                    "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
+                    (target_id.strip(), user_id)
+                )
+                
+                if not success:
+                    await query.answer("❌ Database error. Please try again.", show_alert=True)
+                    return
+                
+                # Get target user info
+                target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id.strip(),))
+                target_name = target_user['anonymous_name'] if target_user else "this user"
+                
+                await query.message.reply_text(
+                    f"✉️ *Composing message to {target_name}*\n\nPlease type your message:",
+                    reply_markup=ForceReply(selective=True),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception as e:
+                logger.error(f"Error in message handler: {e}")
+                await query.answer("❌ Error starting message. Please try again.", show_alert=True)
             
         elif query.data.startswith('reply_msg_'):
-            # Fixed: Properly extract target_id from reply_msg_{target_id}
-            target_id = query.data.split('_')[2] if len(query.data.split('_')) > 2 else query.data.split('_')[1]
-            db_execute(
-                "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
-                (target_id, user_id)
-            )
-            
-            target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id,))
-            target_name = target_user['anonymous_name'] if target_user else "this user"
-            
-            await query.message.reply_text(
-                f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
-                reply_markup=ForceReply(selective=True),
-                parse_mode=ParseMode.MARKDOWN
-            )
+            try:
+                # Extract target_id from callback data (format: reply_msg_{target_id})
+                parts = query.data.split('_')
+                if len(parts) < 3:
+                    await query.answer("❌ Invalid reply format", show_alert=True)
+                    return
+                
+                target_id = parts[2]  # Format is reply_msg_{target_id}
+                
+                if not target_id or not target_id.strip():
+                    await query.answer("❌ Invalid user ID", show_alert=True)
+                    return
+                
+                # Update user state
+                success = db_execute(
+                    "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
+                    (target_id.strip(), user_id)
+                )
+                
+                if not success:
+                    await query.answer("❌ Database error. Please try again.", show_alert=True)
+                    return
+                
+                # Get target user info
+                target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id.strip(),))
+                target_name = target_user['anonymous_name'] if target_user else "this user"
+                
+                await query.message.reply_text(
+                    f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
+                    reply_markup=ForceReply(selective=True),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception as e:
+                logger.error(f"Error in reply_msg handler: {e}")
+                await query.answer("❌ Error starting reply. Please try again.", show_alert=True)
         # Add this in the button_handler function where you handle other callbacks
         elif query.data.startswith("viewpost_"):
             post_id = int(query.data.split('_')[1])
