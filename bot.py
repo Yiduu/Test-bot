@@ -1162,9 +1162,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
+                # Create keyboard with Cancel button
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("❌ Cancel Comment", callback_data=f'cancel_comment_{post_id}')]
+                ])
+                
                 await update.message.reply_text(
-                    f"{preview_text}\n\n✍️ Please type your comment:",
-                    reply_markup=ForceReply(selective=True),
+                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:\n\n"
+                    f"⚠️ *Note:* Click the 'Cancel Comment' button below if you change your mind.",
+                    reply_markup=keyboard,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 return
@@ -2429,9 +2435,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
+                # Create keyboard with Cancel button
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("❌ Cancel Comment", callback_data=f'cancel_comment_{post_id}')]
+                ])
+                
                 await query.message.reply_text(
-                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:",
-                    reply_markup=ForceReply(selective=True),
+                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:\n\n"
+                    f"⚠️ *Note:* Click the 'Cancel Comment' button below if you change your mind.",
+                    reply_markup=keyboard,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
 
@@ -2729,9 +2741,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
+                # Create keyboard with Cancel button
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("❌ Cancel Reply", callback_data=f'cancel_reply_{post_id}_{comment_id}')]
+                ])
+                
                 await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:",
-                    reply_markup=ForceReply(selective=True),
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\n"
+                    f"⚠️ *Note:* Click the 'Cancel Reply' button below if you change your mind.",
+                    reply_markup=keyboard,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 
@@ -2746,17 +2764,58 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "UPDATE users SET waiting_for_comment = TRUE, comment_post_id = %s, comment_idx = %s WHERE user_id = %s",
                     (post_id, comment_id, user_id)
                 )
-        
+            
                 comment = db_fetch_one("SELECT * FROM comments WHERE comment_id = %s", (comment_id,))
                 preview_text = "Original reply not found"
                 if comment:
-                    content = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
+                    content = comment['content'][:100] + '...' if len(comment['content()) > 100 else comment['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
-        
+            
+                # Create keyboard with Cancel button
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("❌ Cancel Reply", callback_data=f'cancel_reply_{post_id}_{comment_id}')]
+                ])
+            
                 await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:",
-                    reply_markup=ForceReply(selective=True),
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\n"
+                    f"⚠️ *Note:* Click the 'Cancel Reply' button below if you change your mind.",
+                    reply_markup=keyboard,
                     parse_mode=ParseMode.MARKDOWN_V2
+                )
+
+        elif query.data.startswith('cancel_comment_'):
+            # Handle cancellation of comment
+            post_id = int(query.data.split('_')[2])
+            
+            # Clear the waiting state
+            db_execute(
+                "UPDATE users SET waiting_for_comment = FALSE, comment_post_id = NULL, comment_idx = NULL WHERE user_id = %s",
+                (user_id,)
+            )
+            
+            await query.answer("✅ Comment cancelled")
+            await query.message.edit_text(
+                "❌ *Comment cancelled*\n\nYou can write a new comment or use other buttons.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        
+        elif query.data.startswith('cancel_reply_'):
+            # Handle cancellation of reply
+            parts = query.data.split('_')
+            if len(parts) >= 4:
+                post_id = int(parts[2])
+                comment_id = int(parts[3])
+                
+                # Clear the waiting state
+                db_execute(
+                    "UPDATE users SET waiting_for_comment = FALSE, comment_post_id = NULL, comment_idx = NULL WHERE user_id = %s",
+                    (user_id,)
+                )
+                
+                await query.answer("✅ Reply cancelled")
+                await query.message.edit_text(
+                    "❌ *Reply cancelled*\n\nYou can write a new reply or use other buttons.",
+                    parse_mode=ParseMode.MARKDOWN
                 )
 
         # UPDATED: Handle Previous Posts pagination
