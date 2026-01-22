@@ -327,7 +327,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__) 
 
 def create_anonymous_name(user_id):
-    # Simply return "Anonymous" for all new users
+    # Simply return "Anonymous" without numbers for all new users
     return "Anonymous"
 
 def calculate_user_rating(user_id):
@@ -1162,15 +1162,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
-                # Create keyboard with Cancel button
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Cancel Comment", callback_data=f'cancel_comment_{post_id}')]
-                ])
-                
                 await update.message.reply_text(
-                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:\n\n"
-                    f"⚠️ *Note:* Click the 'Cancel Comment' button below if you change your mind.",
-                    reply_markup=keyboard,
+                    f"{preview_text}\n\n✍️ Please type your comment:",
+                    reply_markup=ForceReply(selective=True),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 return
@@ -2435,15 +2429,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
-                # Create keyboard with Cancel button
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Cancel Comment", callback_data=f'cancel_comment_{post_id}')]
-                ])
-                
                 await query.message.reply_text(
-                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:\n\n"
-                    f"⚠️ *Note:* Click the 'Cancel Comment' button below if you change your mind.",
-                    reply_markup=keyboard,
+                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:",
+                    reply_markup=ForceReply(selective=True),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
 
@@ -2741,15 +2729,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
-                # Create keyboard with Cancel button
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Cancel Reply", callback_data=f'cancel_reply_{post_id}_{comment_id}')]
-                ])
-                
                 await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\n"
-                    f"⚠️ *Note:* Click the 'Cancel Reply' button below if you change your mind.",
-                    reply_markup=keyboard,
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:",
+                    reply_markup=ForceReply(selective=True),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 
@@ -2764,58 +2746,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "UPDATE users SET waiting_for_comment = TRUE, comment_post_id = %s, comment_idx = %s WHERE user_id = %s",
                     (post_id, comment_id, user_id)
                 )
-            
+        
                 comment = db_fetch_one("SELECT * FROM comments WHERE comment_id = %s", (comment_id,))
                 preview_text = "Original reply not found"
                 if comment:
                     content = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
-            
-                # Create keyboard with Cancel button
-                keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Cancel Reply", callback_data=f'cancel_reply_{post_id}_{comment_id}')]
-                ])
-            
-                await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\n"
-                    f"⚠️ *Note:* Click the 'Cancel Reply' button below if you change your mind.",
-                    reply_markup=keyboard,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-
-        elif query.data.startswith('cancel_comment_'):
-            # Handle cancellation of comment
-            post_id = int(query.data.split('_')[2])
-            
-            # Clear the waiting state
-            db_execute(
-                "UPDATE users SET waiting_for_comment = FALSE, comment_post_id = NULL, comment_idx = NULL WHERE user_id = %s",
-                (user_id,)
-            )
-            
-            await query.answer("✅ Comment cancelled")
-            await query.message.edit_text(
-                "❌ *Comment cancelled*\n\nYou can write a new comment or use other buttons\\.",
-                parse_mode=ParseMode.MARKDOWN
-            )
         
-        elif query.data.startswith('cancel_reply_'):
-            # Handle cancellation of reply
-            parts = query.data.split('_')
-            if len(parts) >= 4:
-                post_id = int(parts[2])
-                comment_id = int(parts[3])
-                
-                # Clear the waiting state
-                db_execute(
-                    "UPDATE users SET waiting_for_comment = FALSE, comment_post_id = NULL, comment_idx = NULL WHERE user_id = %s",
-                    (user_id,)
-                )
-                
-                await query.answer("✅ Reply cancelled")
-                await query.message.edit_text(
-                    "❌ *Reply cancelled*\n\nYou can write a new reply or use other buttons\\.",
-                    parse_mode=ParseMode.MARKDOWN
+                await query.message.reply_text(
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:",
+                    reply_markup=ForceReply(selective=True),
+                    parse_mode=ParseMode.MARKDOWN_V2
                 )
 
         # UPDATED: Handle Previous Posts pagination
@@ -3083,78 +3024,37 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_messages(update, context, page)
             
         elif query.data.startswith('message_'):
-            try:
-                # Extract target_id from callback data
-                parts = query.data.split('_')
-                if len(parts) < 2:
-                    await query.answer("❌ Invalid message format", show_alert=True)
-                    return
-                
-                target_id = parts[1]  # Get the user ID after 'message_'
-                
-                if not target_id or not target_id.strip():
-                    await query.answer("❌ Invalid user ID", show_alert=True)
-                    return
-                
-                # Update user state
-                success = db_execute(
-                    "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
-                    (target_id.strip(), user_id)
-                )
-                
-                if not success:
-                    await query.answer("❌ Database error. Please try again.", show_alert=True)
-                    return
-                
-                # Get target user info
-                target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id.strip(),))
-                target_name = target_user['anonymous_name'] if target_user else "this user"
-                
-                await query.message.reply_text(
-                    f"✉️ *Composing message to {target_name}*\n\nPlease type your message:",
-                    reply_markup=ForceReply(selective=True),
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            except Exception as e:
-                logger.error(f"Error in message handler: {e}")
-                await query.answer("❌ Error starting message. Please try again.", show_alert=True)
+            target_id = query.data.split('_', 1)[1]
+            db_execute(
+                "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
+                (target_id, user_id)
+            )
+            
+            target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id,))
+            target_name = target_user['anonymous_name'] if target_user else "this user"
+            
+            await query.message.reply_text(
+                f"✉️ *Composing message to {target_name}*\n\nPlease type your message:",
+                reply_markup=ForceReply(selective=True),
+                parse_mode=ParseMode.MARKDOWN
+            )
             
         elif query.data.startswith('reply_msg_'):
-            try:
-                # Extract target_id from callback data (format: reply_msg_{target_id})
-                parts = query.data.split('_')
-                if len(parts) < 3:
-                    await query.answer("❌ Invalid reply format", show_alert=True)
-                    return
-                
-                target_id = parts[2]  # Format is reply_msg_{target_id}
-                
-                if not target_id or not target_id.strip():
-                    await query.answer("❌ Invalid user ID", show_alert=True)
-                    return
-                
-                # Update user state
-                success = db_execute(
-                    "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
-                    (target_id.strip(), user_id)
-                )
-                
-                if not success:
-                    await query.answer("❌ Database error. Please try again.", show_alert=True)
-                    return
-                
-                # Get target user info
-                target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id.strip(),))
-                target_name = target_user['anonymous_name'] if target_user else "this user"
-                
-                await query.message.reply_text(
-                    f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
-                    reply_markup=ForceReply(selective=True),
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            except Exception as e:
-                logger.error(f"Error in reply_msg handler: {e}")
-                await query.answer("❌ Error starting reply. Please try again.", show_alert=True)
+            # Fixed: Properly extract target_id from reply_msg_{target_id}
+            target_id = query.data.split('_')[2] if len(query.data.split('_')) > 2 else query.data.split('_')[1]
+            db_execute(
+                "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
+                (target_id, user_id)
+            )
+            
+            target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id,))
+            target_name = target_user['anonymous_name'] if target_user else "this user"
+            
+            await query.message.reply_text(
+                f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
+                reply_markup=ForceReply(selective=True),
+                parse_mode=ParseMode.MARKDOWN
+            )
         # Add this in the button_handler function where you handle other callbacks
         elif query.data.startswith("viewpost_"):
             post_id = int(query.data.split('_')[1])
