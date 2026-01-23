@@ -2274,8 +2274,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error answering callback query: {e}")
     
     user_id = str(query.from_user.id)
-
+    
+    # Log the callback data for debugging
+    logger.info(f"Callback data received: {query.data} from user {user_id}")
+    
     try:
+        # ... rest of your code
         # FIXED: Handle noop callback (do nothing for separator buttons)
         if query.data == 'noop':
             return  # Do nothing and exit the function
@@ -2736,7 +2740,41 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except (IndexError, ValueError):
                 # Fallback to post list
                 await show_previous_posts(update, context, 1)
+        elif query.data.startswith('reply_msg_'):
+            # Handle private message reply button
+            # The format is: reply_msg_<user_id>
+            try:
+                # Extract everything after 'reply_msg_'
+                target_id = query.data[len('reply_msg_'):]
                 
+                if not target_id or not target_id.isdigit():
+                    logger.error(f"Invalid target_id in reply_msg callback: {query.data}")
+                    await query.answer("❌ Invalid user ID", show_alert=True)
+                    return
+                    
+                # Check if target user exists
+                target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id,))
+                if not target_user:
+                    await query.answer("❌ User not found", show_alert=True)
+                    return
+                
+                # Set up the user to send a private message
+                db_execute(
+                    "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
+                    (target_id, user_id)
+                )
+                
+                target_name = target_user['anonymous_name']
+                
+                await query.message.reply_text(
+                    f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
+                    reply_markup=ForceReply(selective=True),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                
+            except Exception as e:
+                logger.error(f"Error in reply_msg handler: {e}, data: {query.data}")
+                await query.answer("❌ Error processing reply", show_alert=True)        
         elif query.data.startswith("reply_"):
             parts = query.data.split("_")
             if len(parts) == 3:
@@ -3063,22 +3101,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.MARKDOWN
             )
             
-        elif query.data.startswith('reply_msg_'):
-            # Fixed: Properly extract target_id from reply_msg_{target_id}
-            target_id = query.data.split('_')[2] if len(query.data.split('_')) > 2 else query.data.split('_')[1]
-            db_execute(
-                "UPDATE users SET waiting_for_private_message = TRUE, private_message_target = %s WHERE user_id = %s",
-                (target_id, user_id)
-            )
-            
-            target_user = db_fetch_one("SELECT anonymous_name FROM users WHERE user_id = %s", (target_id,))
-            target_name = target_user['anonymous_name'] if target_user else "this user"
-            
-            await query.message.reply_text(
-                f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
-                reply_markup=ForceReply(selective=True),
-                parse_mode=ParseMode.MARKDOWN
-            )
+        
+                    
         # Add this in the button_handler function where you handle other callbacks
         elif query.data.startswith("viewpost_"):
             post_id = int(query.data.split('_')[1])
@@ -3435,6 +3459,57 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "How can I help you?",
         reply_markup=main_menu
     )
+async def handle_private_message_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    text = update.message.text
+
+    user = db_fetch_one(
+        "SELECT waiting_for_private_message, private_message_target FROM users WHERE user_id = %s",
+        (user_id,)
+    )
+
+    if not user or not user["waiting_for_private_message"]:
+        return  # Not replying to a private message
+
+    receiver_id = user["private_message_target"]
+
+    # Prevent sending message to self
+    if receiver_id == user_id:
+        await update.message.reply_text("❌ You cannot message yourself.")
+        return
+
+    # Save message
+    msg = db_execute(
+        """
+        INSERT INTO private_messages (sender_id, receiver_id, content)
+        VALUES (%s, %s, %s)
+        RETURNING message_id
+        """,
+        (user_id, receiver_id, text),
+        fetchone=True
+    )
+
+    # Reset reply state
+    db_execute(
+        """
+        UPDATE users
+        SET waiting_for_private_message = FALSE,
+            private_message_target = NULL
+        WHERE user_id = %s
+        """,
+        (user_id,)
+    )
+
+    # Notify receiver
+    await notify_user_of_private_message(
+        context,
+        sender_id=user_id,
+        receiver_id=receiver_id,
+        message_content=text,
+        message_id=msg["message_id"]
+    )
+
+    await update.message.reply_text("✅ Message sent!")
 
 async def error_handler(update, context):
     logger.error(f"Update {update} caused error: {context.error}", exc_info=True) 
@@ -3477,6 +3552,9 @@ def main():
     app.add_handler(CommandHandler("inbox", show_inbox))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_private_message_text))
+
+
     app.add_error_handler(error_handler)
     
     # Start polling
