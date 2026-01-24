@@ -4549,598 +4549,973 @@ def main():
 
 # In bot.py, replace the simple /mini_app route with this:
 
-# Add this import at the top if not already there
-
 @flask_app.route('/mini_app')
-def mini_app_home():
-    """Complete Mini App served from the same service"""
+def mini_app_page():
+    """Complete Mini App served from the bot service"""
     bot_username = BOT_USERNAME
+    app_name = "Christian Vent"
     
-    # Read and serve the mini app HTML
-    html = '''
-<!DOCTYPE html>
+    # Build the HTML for the mini app
+    html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Christian Vent - Mini App</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <title>{app_name} - Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --primary: #BF970B;
-            --bg: #272F32;
-            --text: #E0E0E0;
-            --secondary: #3A4A50;
-            --card: #2E3A40;
-            --border: #3A4A50;
-        }
-        
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        * {{
             margin: 0;
             padding: 0;
-            min-height: 100vh;
-        }
+            box-sizing: border-box;
+        }}
         
-        .app-container {
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #272F32;
+            color: #E0E0E0;
+            min-height: 100vh;
+            padding: 0;
+        }}
+        
+        .app-container {{
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-        }
+            min-height: 100vh;
+        }}
         
-        .app-header {
+        /* Header */
+        .app-header {{
             text-align: center;
             padding: 20px 0;
             margin-bottom: 20px;
-            border-bottom: 1px solid var(--border);
-        }
+            border-bottom: 1px solid #3A4A50;
+        }}
         
-        .app-title {
-            color: var(--primary);
+        .app-title {{
+            color: #BF970B;
             font-size: 2rem;
             margin: 0;
             font-weight: 300;
-        }
+            letter-spacing: 1px;
+        }}
         
-        .app-subtitle {
+        .app-subtitle {{
             opacity: 0.8;
-            margin-top: 5px;
-        }
+            margin-top: 8px;
+            font-size: 0.95rem;
+        }}
         
-        .tab-navigation {
+        /* Tabs */
+        .tab-navigation {{
             display: flex;
-            background: var(--card);
+            background: #2E3A40;
             border-radius: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
             overflow: hidden;
-        }
+            border: 1px solid #3A4A50;
+        }}
         
-        .tab-btn {
+        .tab-btn {{
             flex: 1;
             padding: 15px;
             background: none;
             border: none;
-            color: var(--text);
+            color: #E0E0E0;
             cursor: pointer;
             transition: all 0.3s;
             opacity: 0.7;
             font-size: 0.9rem;
-        }
+            font-weight: 500;
+        }}
         
-        .tab-btn.active {
+        .tab-btn:hover {{
             opacity: 1;
-            color: var(--primary);
             background: rgba(191, 151, 11, 0.1);
-        }
+        }}
         
-        .tab-pane {
+        .tab-btn.active {{
+            opacity: 1;
+            color: #BF970B;
+            background: rgba(191, 151, 11, 0.1);
+        }}
+        
+        /* Tab Content */
+        .tab-content {{
+            margin-top: 10px;
+        }}
+        
+        .tab-pane {{
             display: none;
-            animation: fadeIn 0.3s;
-        }
+            animation: fadeIn 0.3s ease;
+        }}
         
-        .tab-pane.active {
+        .tab-pane.active {{
             display: block;
-        }
+        }}
         
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
         
-        .section-header {
+        /* Vent Form */
+        .vent-form-container {{
+            background: #2E3A40;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            margin-bottom: 25px;
+        }}
+        
+        .form-title {{
+            color: #BF970B;
+            margin-bottom: 10px;
+            font-weight: 400;
+        }}
+        
+        .form-description {{
+            opacity: 0.8;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }}
+        
+        .category-select {{
+            width: 100%;
+            padding: 12px 15px;
+            background: #272F32;
+            border: 1px solid #3A4A50;
+            color: #E0E0E0;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }}
+        
+        .category-select:focus {{
+            outline: none;
+            border-color: #BF970B;
+        }}
+        
+        .vent-textarea {{
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            background: #272F32;
+            border: 1px solid #3A4A50;
+            color: #E0E0E0;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            line-height: 1.6;
+            resize: vertical;
+            margin-bottom: 10px;
+        }}
+        
+        .vent-textarea:focus {{
+            outline: none;
+            border-color: #BF970B;
+            box-shadow: 0 0 0 2px rgba(191, 151, 11, 0.2);
+        }}
+        
+        .textarea-footer {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-        }
-        
-        .section-header h2 {
-            color: var(--primary);
-            font-weight: 400;
-            margin: 0;
-        }
-        
-        .refresh-btn {
-            background: var(--secondary);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
             font-size: 0.9rem;
-        }
+            opacity: 0.8;
+        }}
         
-        .vent-form-container {
-            background: var(--card);
-            padding: 25px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            margin-bottom: 20px;
-        }
+        .privacy-note {{
+            color: #BF970B;
+            font-size: 0.85rem;
+        }}
         
-        .vent-textarea {
+        .submit-btn {{
             width: 100%;
-            min-height: 150px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
             padding: 15px;
-            border-radius: 8px;
-            font-size: 1rem;
-            margin: 15px 0;
-            resize: vertical;
-        }
-        
-        .vent-textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-        
-        .submit-btn {
-            background: var(--primary);
-            color: var(--bg);
+            background: #BF970B;
+            color: #272F32;
             border: none;
-            padding: 15px 30px;
             border-radius: 8px;
             font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
-            width: 100%;
-            transition: background 0.3s;
-        }
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
         
-        .submit-btn:hover {
+        .submit-btn:hover {{
             background: #d4a90f;
-        }
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(191, 151, 11, 0.3);
+        }}
         
-        .post-card {
-            background: var(--card);
-            border: 1px solid var(--border);
+        .submit-btn:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }}
+        
+        .form-note {{
+            text-align: center;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }}
+        
+        /* Posts Section */
+        .posts-container {{
+            margin-top: 10px;
+        }}
+        
+        .section-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        
+        .section-title {{
+            color: #BF970B;
+            font-weight: 400;
+            margin: 0;
+        }}
+        
+        .refresh-btn {{
+            background: #3A4A50;
+            border: 1px solid #3A4A50;
+            color: #E0E0E0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }}
+        
+        .refresh-btn:hover {{
+            background: #BF970B;
+            color: #272F32;
+        }}
+        
+        /* Post Cards */
+        .post-card {{
+            background: #2E3A40;
+            border: 1px solid #3A4A50;
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 15px;
             transition: all 0.3s;
-        }
+            cursor: pointer;
+        }}
         
-        .post-card:hover {
-            border-color: var(--primary);
+        .post-card:hover {{
+            border-color: #BF970B;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }}
         
-        .post-content {
+        .post-header {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }}
+        
+        .author-avatar {{
+            width: 40px;
+            height: 40px;
+            background: rgba(191, 151, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #BF970B;
+            font-weight: bold;
+            margin-right: 12px;
+        }}
+        
+        .author-info h4 {{
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 0 0 5px 0;
+        }}
+        
+        .post-meta {{
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .post-category {{
+            display: inline-block;
+            background: rgba(191, 151, 11, 0.1);
+            color: #BF970B;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }}
+        
+        .post-content {{
             margin: 15px 0;
-            line-height: 1.6;
-        }
+            line-height: 1.7;
+            font-size: 1rem;
+        }}
         
-        .loading {
+        .post-footer {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #3A4A50;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }}
+        
+        /* Leaderboard */
+        .leaderboard-container {{
+            background: #2E3A40;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            overflow: hidden;
+        }}
+        
+        .leaderboard-item {{
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #3A4A50;
+            transition: background 0.3s;
+        }}
+        
+        .leaderboard-item:last-child {{
+            border-bottom: none;
+        }}
+        
+        .leaderboard-item:hover {{
+            background: rgba(191, 151, 11, 0.05);
+        }}
+        
+        .leaderboard-rank {{
+            width: 40px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #BF970B;
+        }}
+        
+        .rank-1 {{ color: gold; }}
+        .rank-2 {{ color: silver; }}
+        .rank-3 {{ color: #cd7f32; }}
+        
+        .leaderboard-user {{
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+        
+        .user-avatar-small {{
+            width: 40px;
+            height: 40px;
+            background: rgba(191, 151, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #BF970B;
+        }}
+        
+        .user-info-small h4 {{
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 0 0 4px 0;
+        }}
+        
+        .user-info-small p {{
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin: 0;
+        }}
+        
+        .leaderboard-points {{
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #BF970B;
+        }}
+        
+        /* Profile */
+        .profile-container {{
+            background: #2E3A40;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            padding: 25px;
+        }}
+        
+        .profile-header {{
             text-align: center;
-            padding: 40px;
-            color: var(--primary);
-        }
+            margin-bottom: 25px;
+        }}
         
-        .error {
+        .profile-avatar {{
+            width: 100px;
+            height: 100px;
+            background: rgba(191, 151, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: #BF970B;
+            margin: 0 auto 15px;
+        }}
+        
+        .profile-header h2 {{
+            font-size: 1.8rem;
+            margin: 0 0 10px 0;
+        }}
+        
+        .profile-rating {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(191, 151, 11, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 10px;
+        }}
+        
+        /* Footer */
+        .app-footer {{
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #3A4A50;
+            text-align: center;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }}
+        
+        .telegram-link {{
+            color: #BF970B;
+            text-decoration: none;
+        }}
+        
+        .telegram-link:hover {{
+            text-decoration: underline;
+        }}
+        
+        /* Messages */
+        .message {{
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }}
+        
+        .error-message {{
             background: rgba(255, 0, 0, 0.1);
             border: 1px solid rgba(255, 0, 0, 0.3);
             color: #ff6b6b;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }
+        }}
         
-        .success {
+        .success-message {{
             background: rgba(0, 255, 0, 0.1);
             border: 1px solid rgba(0, 255, 0, 0.3);
             color: #51cf66;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }
+        }}
         
-        .category-select {
-            width: 100%;
-            padding: 12px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            border-radius: 8px;
-            font-size: 1rem;
-            margin-bottom: 15px;
-        }
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateY(-10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
         
-        .footer {
+        /* Loading */
+        .loading {{
             text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border);
-            font-size: 0.9rem;
+            padding: 40px;
+            color: #BF970B;
+        }}
+        
+        /* Empty States */
+        .empty-state {{
+            text-align: center;
+            padding: 40px;
             opacity: 0.7;
-        }
-        
-        .telegram-link {
-            color: var(--primary);
-            text-decoration: none;
-        }
-        
-        .telegram-link:hover {
-            text-decoration: underline;
-        }
+        }}
         
         /* Responsive */
-        @media (max-width: 768px) {
-            .app-container {
+        @media (max-width: 768px) {{
+            .app-container {{
                 padding: 15px;
-            }
+            }}
             
-            .app-title {
+            .app-title {{
                 font-size: 1.5rem;
-            }
+            }}
             
-            .tab-btn {
+            .tab-btn {{
                 padding: 12px;
-                font-size: 0.8rem;
-            }
+                font-size: 0.85rem;
+            }}
             
-            .vent-form-container {
+            .vent-form-container {{
+                padding: 20px;
+            }}
+            
+            .post-card {{
                 padding: 15px;
-            }
-        }
+            }}
+        }}
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-container" id="appContainer">
+        <!-- Header -->
         <header class="app-header">
-            <h1 class="app-title">✝️ Christian Vent</h1>
-            <p class="app-subtitle">A safe space for anonymous Christian sharing</p>
+            <h1 class="app-title">✝️ {app_name}</h1>
+            <p class="app-subtitle">A safe space for Christian anonymous venting</p>
+            <div id="userInfo" class="user-info" style="margin-top: 15px; display: none;">
+                <!-- User info will be loaded here -->
+            </div>
         </header>
         
+        <!-- Navigation Tabs -->
         <nav class="tab-navigation">
             <button class="tab-btn active" data-tab="vent">✍️ Vent</button>
-            <button class="tab-btn" data-tab="posts">📖 Posts</button>
+            <button class="tab-btn" data-tab="posts">📖 Feed</button>
             <button class="tab-btn" data-tab="leaderboard">🏆 Leaderboard</button>
             <button class="tab-btn" data-tab="profile">👤 Profile</button>
         </nav>
         
-        <!-- Vent Tab -->
-        <div id="vent-tab" class="tab-pane active">
-            <div class="vent-form-container">
-                <h2>Share Your Burden</h2>
-                <p>You are anonymous here. Share what's on your heart.</p>
-                
-                <select class="category-select" id="category">
-                    <option value="PrayForMe">🙏 Pray For Me</option>
-                    <option value="Bible">📖 Bible Study</option>
-                    <option value="WorkLife">💼 Work and Life</option>
-                    <option value="SpiritualLife">🕊️ Spiritual Life</option>
-                    <option value="ChristianChallenges">⚔️ Christian Challenges</option>
-                    <option value="Relationship">❤️ Relationship</option>
-                    <option value="Marriage">💍 Marriage</option>
-                    <option value="Youth">👥 Youth</option>
-                    <option value="Finance">💰 Finance</option>
-                    <option value="Other" selected>📝 Other</option>
-                </select>
-                
-                <textarea 
-                    class="vent-textarea" 
-                    id="vent-text" 
-                    placeholder="What's on your heart? (You are anonymous here)"
-                    maxlength="5000"
-                ></textarea>
-                
-                <div style="text-align: right; margin-bottom: 15px; font-size: 0.9rem; opacity: 0.8;">
-                    <span id="char-count">0/5000</span> characters
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Vent Tab -->
+            <div id="vent-tab" class="tab-pane active">
+                <div class="vent-form-container">
+                    <h2 class="form-title">Share Your Burden</h2>
+                    <p class="form-description">You are anonymous here. Share what's on your heart without fear.</p>
+                    
+                    <select class="category-select" id="categorySelect">
+                        <option value="PrayForMe">🙏 Pray For Me</option>
+                        <option value="Bible">📖 Bible Study</option>
+                        <option value="WorkLife">💼 Work and Life</option>
+                        <option value="SpiritualLife">🕊️ Spiritual Life</option>
+                        <option value="ChristianChallenges">⚔️ Christian Challenges</option>
+                        <option value="Relationship">❤️ Relationship</option>
+                        <option value="Marriage">💍 Marriage</option>
+                        <option value="Youth">👥 Youth</option>
+                        <option value="Finance">💰 Finance</option>
+                        <option value="Other" selected>📝 Other</option>
+                    </select>
+                    
+                    <textarea 
+                        class="vent-textarea" 
+                        id="ventText" 
+                        placeholder="What's on your heart? Share your thoughts, prayers, or struggles..."
+                        maxlength="5000"
+                    ></textarea>
+                    
+                    <div class="textarea-footer">
+                        <span id="charCount">0/5000 characters</span>
+                        <span class="privacy-note">Your identity is protected</span>
+                    </div>
+                    
+                    <button class="submit-btn" id="submitVent">
+                        Post Anonymously
+                    </button>
+                    
+                    <p class="form-note">Posts are reviewed before appearing in the feed</p>
                 </div>
-                
-                <button class="submit-btn" id="submit-vent">
-                    Post Anonymously
-                </button>
-                
-                <p style="text-align: center; margin-top: 15px; font-size: 0.9rem; opacity: 0.7;">
-                    Posts are reviewed before appearing in the feed
-                </p>
+            </div>
+            
+            <!-- Posts Tab -->
+            <div id="posts-tab" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">Recent Vents</h2>
+                    <button class="refresh-btn" id="refreshPosts">Refresh</button>
+                </div>
+                <div class="posts-container" id="postsContainer">
+                    <div class="loading">Loading community posts...</div>
+                </div>
+            </div>
+            
+            <!-- Leaderboard Tab -->
+            <div id="leaderboard-tab" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">Top Contributors</h2>
+                    <button class="refresh-btn" id="refreshLeaderboard">Refresh</button>
+                </div>
+                <div class="leaderboard-container" id="leaderboardContainer">
+                    <div class="loading">Loading leaderboard...</div>
+                </div>
+            </div>
+            
+            <!-- Profile Tab -->
+            <div id="profile-tab" class="tab-pane">
+                <div class="profile-container" id="profileContainer">
+                    <div class="loading">Loading your profile...</div>
+                </div>
             </div>
         </div>
         
-        <!-- Posts Tab -->
-        <div id="posts-tab" class="tab-pane">
-            <div class="section-header">
-                <h2>Recent Posts</h2>
-                <button class="refresh-btn" id="refresh-posts">Refresh</button>
-            </div>
-            <div id="posts-container">
-                <div class="loading">Loading posts...</div>
-            </div>
-        </div>
-        
-        <!-- Leaderboard Tab -->
-        <div id="leaderboard-tab" class="tab-pane">
-            <div class="section-header">
-                <h2>Top Contributors</h2>
-                <button class="refresh-btn" id="refresh-leaderboard">Refresh</button>
-            </div>
-            <div id="leaderboard-container">
-                <div class="loading">Loading leaderboard...</div>
-            </div>
-        </div>
-        
-        <!-- Profile Tab -->
-        <div id="profile-tab" class="tab-pane">
-            <div id="profile-container">
-                <div class="loading">Loading profile...</div>
-            </div>
-        </div>
-        
-        <div class="footer">
+        <!-- Footer -->
+        <footer class="app-footer">
             <p>
                 Connect with our community on Telegram: 
-                <a href="https://t.me/''' + bot_username + '''" class="telegram-link" target="_blank">
-                    @''' + bot_username + '''
+                <a href="https://t.me/{bot_username}" class="telegram-link" target="_blank">
+                    @{bot_username}
                 </a>
             </p>
-            <p style="margin-top: 10px; font-size: 0.8rem;">
+            <p style="margin-top: 10px; font-size: 0.85rem;">
                 This is the Christian Vent Mini App. Your identity is protected.
             </p>
-        </div>
+        </footer>
     </div>
     
     <script>
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            const app = new ChristianVentApp();
-            window.app = app;
-        });
-        
-        class ChristianVentApp {
-            constructor() {
-                this.userId = null;
+        // Christian Vent Mini App - Main JavaScript
+        class ChristianVentApp {{
+            constructor() {{
+                this.user = null;
                 this.token = null;
-                this.botUsername = "''' + bot_username + '''";
+                this.botUsername = "{bot_username}";
                 this.init();
-            }
+            }}
             
-            init() {
+            init() {{
                 this.setupEventListeners();
                 this.loadUserData();
+                this.checkTelegramWebApp();
+                
+                // Check for token in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlToken = urlParams.get('token');
+                if (urlToken) {{
+                    this.token = urlToken;
+                }}
+                
+                // Load initial data
                 this.loadPosts();
                 this.loadLeaderboard();
-                
-                // Check if we're in Telegram WebApp
-                if (window.Telegram && Telegram.WebApp) {
+            }}
+            
+            checkTelegramWebApp() {{
+                if (window.Telegram && Telegram.WebApp) {{
                     Telegram.WebApp.ready();
                     Telegram.WebApp.expand();
                     console.log("Running in Telegram WebApp");
                     
-                    // Get user from Telegram
-                    const user = Telegram.WebApp.initDataUnsafe.user;
-                    if (user) {
-                        this.userId = user.id;
-                        console.log("Telegram user:", user);
-                    }
-                }
-                
-                // Check URL for token
-                const urlParams = new URLSearchParams(window.location.search);
-                const urlToken = urlParams.get('token');
-                if (urlToken) {
-                    this.token = urlToken;
-                    localStorage.setItem('cv_token', urlToken);
-                } else {
-                    // Check localStorage
-                    const storedToken = localStorage.getItem('cv_token');
-                    if (storedToken) {
-                        this.token = storedToken;
-                    }
-                }
-            }
+                    // Get user data from Telegram
+                    const tgUser = Telegram.WebApp.initDataUnsafe.user;
+                    if (tgUser) {{
+                        this.user = {{
+                            id: tgUser.id,
+                            name: tgUser.first_name || 'Anonymous',
+                            username: tgUser.username
+                        }};
+                        this.updateUserInfo();
+                    }}
+                }}
+            }}
             
-            setupEventListeners() {
+            setupEventListeners() {{
                 // Tab switching
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-btn').forEach(btn => {{
+                    btn.addEventListener('click', (e) => {{
                         const tab = e.target.dataset.tab;
                         this.switchTab(tab);
-                    });
-                });
+                    }});
+                }});
                 
                 // Character counter
-                const ventText = document.getElementById('vent-text');
-                const charCount = document.getElementById('char-count');
-                
-                if (ventText && charCount) {
-                    ventText.addEventListener('input', () => {
-                        charCount.textContent = `${ventText.value.length}/5000`;
-                    });
-                }
+                const ventText = document.getElementById('ventText');
+                const charCount = document.getElementById('charCount');
+                if (ventText && charCount) {{
+                    ventText.addEventListener('input', () => {{
+                        charCount.textContent = `${{ventText.value.length}}/5000 characters`;
+                    }});
+                }}
                 
                 // Submit vent
-                const submitBtn = document.getElementById('submit-vent');
-                if (submitBtn) {
+                const submitBtn = document.getElementById('submitVent');
+                if (submitBtn) {{
                     submitBtn.addEventListener('click', () => this.submitVent());
-                }
+                }}
                 
                 // Refresh buttons
-                document.getElementById('refresh-posts')?.addEventListener('click', () => this.loadPosts());
-                document.getElementById('refresh-leaderboard')?.addEventListener('click', () => this.loadLeaderboard());
-            }
+                document.getElementById('refreshPosts')?.addEventListener('click', () => this.loadPosts());
+                document.getElementById('refreshLeaderboard')?.addEventListener('click', () => this.loadLeaderboard());
+            }}
             
-            switchTab(tabName) {
+            switchTab(tabName) {{
                 // Update active tab button
-                document.querySelectorAll('.tab-btn').forEach(btn => {
+                document.querySelectorAll('.tab-btn').forEach(btn => {{
                     btn.classList.toggle('active', btn.dataset.tab === tabName);
-                });
+                }});
                 
                 // Update active tab pane
-                document.querySelectorAll('.tab-pane').forEach(pane => {
-                    pane.classList.toggle('active', pane.id === `${tabName}-tab`);
-                });
-            }
+                document.querySelectorAll('.tab-pane').forEach(pane => {{
+                    pane.classList.toggle('active', pane.id === `${{tabName}}-tab`);
+                }});
+                
+                // Load data for the tab if needed
+                if (tabName === 'profile') {{
+                    this.loadProfile();
+                }}
+            }}
             
-            async loadPosts() {
-                const container = document.getElementById('posts-container');
+            updateUserInfo() {{
+                const userInfoEl = document.getElementById('userInfo');
+                if (userInfoEl && this.user) {{
+                    userInfoEl.innerHTML = `
+                        <div style="background: rgba(191, 151, 11, 0.1); padding: 10px 15px; border-radius: 8px; display: inline-block;">
+                            👋 Welcome, ${{this.user.name}}!
+                        </div>
+                    `;
+                    userInfoEl.style.display = 'block';
+                }}
+            }}
+            
+            async loadPosts() {{
+                const container = document.getElementById('postsContainer');
                 if (!container) return;
                 
-                container.innerHTML = '<div class="loading">Loading posts...</div>';
+                container.innerHTML = '<div class="loading">Loading community posts...</div>';
                 
-                try {
-                    // This would be your API endpoint
-                    // For now, show a message
-                    setTimeout(() => {
+                try {{
+                    // For now, show demo posts
+                    setTimeout(() => {{
                         container.innerHTML = `
                             <div style="text-align: center; padding: 40px;">
-                                <h3>Posts Feature</h3>
-                                <p>To view and interact with posts, please use our Telegram bot.</p>
-                                <button onclick="window.open('https://t.me/${this.botUsername}', '_blank')" 
-                                        style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-top: 15px; cursor: pointer;">
+                                <h3 style="color: #BF970B; margin-bottom: 15px;">Community Feed</h3>
+                                <p style="margin-bottom: 20px; opacity: 0.8;">
+                                    To view and interact with posts, please use our Telegram bot.
+                                </p>
+                                <button onclick="window.open('https://t.me/${{this.botUsername}}', '_blank')" 
+                                        style="background: #BF970B; color: #272F32; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer;">
                                     Open Telegram Bot
                                 </button>
+                                <div style="margin-top: 30px; background: rgba(191, 151, 11, 0.1); padding: 20px; border-radius: 8px;">
+                                    <h4 style="margin-bottom: 15px;">Coming Soon:</h4>
+                                    <ul style="text-align: left; display: inline-block;">
+                                        <li>Live feed of anonymous vents</li>
+                                        <li>Comment and support system</li>
+                                        <li>Prayer request highlights</li>
+                                        <li>Real-time updates</li>
+                                    </ul>
+                                </div>
                             </div>
                         `;
-                    }, 1000);
-                } catch (error) {
-                    container.innerHTML = '<div class="error">Failed to load posts</div>';
-                }
-            }
+                    }}, 1000);
+                }} catch (error) {{
+                    console.error('Error loading posts:', error);
+                    container.innerHTML = '<div class="error-message">Failed to load posts</div>';
+                }}
+            }}
             
-            async loadLeaderboard() {
-                const container = document.getElementById('leaderboard-container');
+            async loadLeaderboard() {{
+                const container = document.getElementById('leaderboardContainer');
                 if (!container) return;
                 
                 container.innerHTML = '<div class="loading">Loading leaderboard...</div>';
                 
-                try {
-                    // This would be your API endpoint
-                    // For now, show a message
-                    setTimeout(() => {
+                try {{
+                    // For now, show demo leaderboard
+                    setTimeout(() => {{
                         container.innerHTML = `
-                            <div style="text-align: center; padding: 40px;">
-                                <h3>Leaderboard Feature</h3>
-                                <p>To view the leaderboard, please use our Telegram bot.</p>
-                                <button onclick="window.open('https://t.me/${this.botUsername}?start=leaderboard', '_blank')" 
-                                        style="background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-top: 15px; cursor: pointer;">
-                                    View Leaderboard in Bot
-                                </button>
+                            <div style="padding: 20px;">
+                                <div style="text-align: center; margin-bottom: 20px;">
+                                    <h3 style="color: #BF970B;">Top Contributors</h3>
+                                    <p style="opacity: 0.8;">Based on community contributions</p>
+                                </div>
+                                
+                                <div class="leaderboard-item">
+                                    <div class="leaderboard-rank rank-1">1</div>
+                                    <div class="leaderboard-user">
+                                        <div class="user-avatar-small">🙏</div>
+                                        <div class="user-info-small">
+                                            <h4>Prayer Warrior</h4>
+                                            <p>⭐ Top Supporter</p>
+                                        </div>
+                                    </div>
+                                    <div class="leaderboard-points">248 pts</div>
+                                </div>
+                                
+                                <div class="leaderboard-item">
+                                    <div class="leaderboard-rank rank-2">2</div>
+                                    <div class="leaderboard-user">
+                                        <div class="user-avatar-small">📖</div>
+                                        <div class="user-info-small">
+                                            <h4>Bible Scholar</h4>
+                                            <p>📚 Knowledgeable</p>
+                                        </div>
+                                    </div>
+                                    <div class="leaderboard-points">189 pts</div>
+                                </div>
+                                
+                                <div class="leaderboard-item">
+                                    <div class="leaderboard-rank rank-3">3</div>
+                                    <div class="leaderboard-user">
+                                        <div class="user-avatar-small">❤️</div>
+                                        <div class="user-info-small">
+                                            <h4>Comforter</h4>
+                                            <p>💭 Supportive</p>
+                                        </div>
+                                    </div>
+                                    <div class="leaderboard-points">156 pts</div>
+                                </div>
+                                
+                                <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #3A4A50;">
+                                    <p style="margin-bottom: 15px; opacity: 0.8;">View full leaderboard in the bot</p>
+                                    <button onclick="window.open('https://t.me/${{this.botUsername}}?start=leaderboard', '_blank')" 
+                                            style="background: #BF970B; color: #272F32; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                        View Full Leaderboard
+                                    </button>
+                                </div>
                             </div>
                         `;
-                    }, 1000);
-                } catch (error) {
-                    container.innerHTML = '<div class="error">Failed to load leaderboard</div>';
-                }
-            }
+                    }}, 1000);
+                }} catch (error) {{
+                    console.error('Error loading leaderboard:', error);
+                    container.innerHTML = '<div class="error-message">Failed to load leaderboard</div>';
+                }}
+            }}
             
-            async submitVent() {
-                const ventText = document.getElementById('vent-text');
-                const category = document.getElementById('category');
-                const submitBtn = document.getElementById('submit-vent');
+            async submitVent() {{
+                const ventText = document.getElementById('ventText');
+                const categorySelect = document.getElementById('categorySelect');
+                const submitBtn = document.getElementById('submitVent');
                 
-                if (!ventText || !category || !submitBtn) return;
+                if (!ventText || !categorySelect || !submitBtn) return;
                 
                 const content = ventText.value.trim();
-                const selectedCategory = category.value;
+                const category = categorySelect.value;
                 
-                if (!content) {
+                if (!content) {{
                     this.showMessage('Please write something before posting', 'error');
                     return;
-                }
+                }}
                 
-                if (content.length > 5000) {
+                if (content.length > 5000) {{
                     this.showMessage('Text is too long (max 5000 characters)', 'error');
                     return;
-                }
+                }}
                 
-                // Disable button
+                // Disable button and show loading
                 const originalText = submitBtn.textContent;
                 submitBtn.textContent = 'Posting...';
                 submitBtn.disabled = true;
                 
-                try {
-                    // Show success message (for demo)
+                try {{
+                    // Show success message
                     this.showMessage('Your vent has been submitted for review. It will appear in the feed after approval.', 'success');
                     
-                    // Clear textarea
+                    // Clear the form
                     ventText.value = '';
-                    document.getElementById('char-count').textContent = '0/5000';
+                    document.getElementById('charCount').textContent = '0/5000 characters';
                     
-                    // Switch to posts tab
-                    this.switchTab('posts');
+                    // Switch to posts tab after 2 seconds
+                    setTimeout(() => {{
+                        this.switchTab('posts');
+                    }}, 2000);
                     
-                } catch (error) {
+                }} catch (error) {{
+                    console.error('Error submitting vent:', error);
                     this.showMessage('Failed to submit. Please try again.', 'error');
-                } finally {
+                }} finally {{
                     submitBtn.textContent = originalText;
                     submitBtn.disabled = false;
-                }
-            }
+                }}
+            }}
             
-            loadUserData() {
-                // For now, just show basic info
-                const container = document.getElementById('profile-container');
+            loadProfile() {{
+                const container = document.getElementById('profileContainer');
                 if (!container) return;
                 
+                const userName = this.user ? this.user.name : 'Anonymous';
+                
                 container.innerHTML = `
-                    <div class="vent-form-container">
-                        <div style="text-align: center; margin-bottom: 20px;">
-                            <div style="width: 80px; height: 80px; background: rgba(191, 151, 11, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 2rem;">
-                                👤
+                    <div class="profile-header">
+                        <div class="profile-avatar">
+                            {{{{ this.user ? '🙏' : '👤' }}}}
+                        </div>
+                        <h2>${{userName}}</h2>
+                        <div class="profile-rating">
+                            ⭐ Level 1 Contributor
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(191, 151, 11, 0.1); padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="color: #BF970B; margin-bottom: 10px;">Your Statistics</h4>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+                            <div>
+                                <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">0</div>
+                                <div style="font-size: 0.9rem; opacity: 0.8;">Vents</div>
                             </div>
-                            <h3>Anonymous User</h3>
-                            <p style="opacity: 0.8;">Your identity is protected</p>
+                            <div>
+                                <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">0</div>
+                                <div style="font-size: 0.9rem; opacity: 0.8;">Comments</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">0</div>
+                                <div style="font-size: 0.9rem; opacity: 0.8;">Followers</div>
+                            </div>
                         </div>
-                        
-                        <div style="background: var(--bg); padding: 15px; border-radius: 8px; margin: 20px 0;">
-                            <p><strong>Note:</strong> Full profile features are available in the Telegram bot.</p>
-                        </div>
-                        
-                        <button onclick="window.open('https://t.me/${this.botUsername}', '_blank')" 
-                                style="background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; cursor: pointer; font-size: 1rem;">
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 25px;">
+                        <p style="margin-bottom: 15px; opacity: 0.8;">For full profile features, use the Telegram bot</p>
+                        <button onclick="window.open('https://t.me/${{this.botUsername}}', '_blank')" 
+                                style="background: #BF970B; color: #272F32; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%;">
                             Open Full Profile in Bot
                         </button>
                     </div>
                 `;
-            }
+            }}
             
-            showMessage(message, type = 'info') {
-                // Create message element
+            loadUserData() {{
+                // For now, just show basic info
+                // In a real app, you would fetch user data from your API
+            }}
+            
+            showMessage(message, type = 'success') {{
+                // Remove any existing messages
+                const existingMessages = document.querySelectorAll('.message');
+                existingMessages.forEach(msg => msg.remove());
+                
+                // Create new message element
                 const messageEl = document.createElement('div');
-                messageEl.className = type === 'error' ? 'error' : 'success';
+                messageEl.className = `message ${{type === 'error' ? 'error-message' : 'success-message'}}`;
                 messageEl.textContent = message;
                 
                 // Add to top of app container
-                const appContainer = document.querySelector('.app-container');
-                appContainer.insertBefore(messageEl, appContainer.firstChild);
-                
-                // Remove after 5 seconds
-                setTimeout(() => {
-                    messageEl.remove();
-                }, 5000);
-            }
-        }
+                const appContainer = document.getElementById('appContainer');
+                if (appContainer) {{
+                    appContainer.insertBefore(messageEl, appContainer.firstChild);
+                    
+                    // Remove after 5 seconds
+                    setTimeout(() => {{
+                        if (messageEl.parentNode) {{
+                            messageEl.remove();
+                        }}
+                    }}, 5000);
+                }}
+            }}
+        }}
+        
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {{
+            window.app = new ChristianVentApp();
+        }});
     </script>
 </body>
-</html>
-'''
+</html>'''
     
     return html
 if __name__ == "__main__": 
