@@ -4466,12 +4466,15 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send the mini app link to user"""
     user_id = str(update.effective_user.id)
     
-    # Get your Render URL from environment or use the bot's username
-    # If you have a separate mini app service, use that URL here
-    mini_app_service_url = f"https://{BOT_USERNAME}-mini-app.onrender.com"  # Adjust based on your actual URL
+    # Use YOUR ACTUAL RENDER URL (the one for your bot service)
+    # Get it from environment or hardcode it
+    render_url = os.getenv('RENDER_URL')
     
-    # Create the WebApp URL
-    mini_app_url = f"{mini_app_service_url}/mini_app"
+    # Generate a simple token
+    token = f"user_{user_id}_{int(time.time())}"
+    
+    # Create the mini app URL (pointing to YOUR bot service)
+    mini_app_url = f"{render_url}/mini_app?token={token}"
     
     # Create WebApp button
     web_app_info = WebAppInfo(url=mini_app_url)
@@ -4485,12 +4488,13 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         "🌐 *Christian Vent Web App*\n\n"
-        "Click the button below to open our web interface. "
+        "Click the button below to open our web interface.\n\n"
         "You can:\n"
         "• Share anonymous vents\n"
         "• View community posts\n"
         "• See the leaderboard\n"
-        "• Manage your profile",
+        "• Manage your profile\n\n"
+        "_Note: Some features require the Telegram bot for full functionality._",
         reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN
     )
