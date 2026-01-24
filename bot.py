@@ -804,79 +804,8 @@ async def notify_admin_of_new_post(context: ContextTypes.DEFAULT_TYPE, post_id: 
         )
     except Exception as e:
         logger.error(f"Error notifying admin: {e}")
-async def notify_admin_of_new_post_sync_with_bot(post_id):
-    """Notify admin via bot when post is submitted from mini app"""
-    try:
-        if not ADMIN_ID:
-            return
-        
-        post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
-        if not post:
-            return
-        
-        author = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (post['author_id'],))
-        author_name = get_display_name(author)
-        
-        post_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
-        
-        # Store in a queue or database for the bot to process
-        # For now, we'll log it and the bot can check periodically
-        logger.info(f"🆕 Mini App Post waiting approval: Post {post_id} from {author_name}")
-        
-    except Exception as e:
-        logger.error(f"Error in admin notification: {e}")
 
 # Update the submit vent endpoint to use this
-@flask_app.route('/api/mini-app/submit-vent', methods=['POST'])
-def mini_app_submit_vent():
-    """API endpoint for submitting vents from mini app"""
-    try:
-        import json
-        
-        # Get data from request
-        data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'error': 'No data provided'}), 400
-        
-        user_id = data.get('user_id')
-        content = data.get('content', '').strip()
-        category = data.get('category', 'Other')
-        
-        if not user_id:
-            return jsonify({'success': False, 'error': 'User ID required'}), 400
-        
-        if not content:
-            return jsonify({'success': False, 'error': 'Content cannot be empty'}), 400
-        
-        # Check if user exists
-        user = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (user_id,))
-        if not user:
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-        
-        # Insert the post
-        post_row = db_execute(
-            "INSERT INTO posts (content, author_id, category, media_type) VALUES (%s, %s, %s, 'text') RETURNING post_id",
-            (content, user_id, category),
-            fetchone=True
-        )
-        
-        if post_row:
-            post_id = post_row['post_id']
-            
-            # Notify admin
-            notify_admin_of_new_post_sync_with_bot(post_id)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Your vent has been submitted for approval',
-                'post_id': post_id
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to create post'}), 500
-            
-    except Exception as e:
-        logger.error(f"Error in mini-app submit vent: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
 async def notify_user_of_private_message(context: ContextTypes.DEFAULT_TYPE, sender_id: str, receiver_id: str, message_content: str, message_id: int):
     try:
         # Check if receiver has blocked the sender
