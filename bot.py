@@ -5892,7 +5892,7 @@ def mini_app_submit_vent():
             post_id = post_row['post_id']
             
             # Notify admin (same as bot does)
-            await notify_admin_of_new_post_sync(post_id)
+            notify_admin_of_new_post_sync(post_id)
             
             return jsonify({
                 'success': True,
