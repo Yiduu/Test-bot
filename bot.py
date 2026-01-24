@@ -3956,6 +3956,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
                     
         # Add this in the button_handler function where you handle other callbacks
+        elif query.data == 'refresh_mini_app':
+            await query.answer("Refreshing...")
+            await mini_app_command(update, context)
         elif query.data.startswith("viewpost_"):
             post_id = int(query.data.split('_')[1])
             await view_post(update, context, post_id)    
@@ -4459,26 +4462,35 @@ async def set_bot_commands(app):
     await app.bot.set_my_commands(commands)
 
 async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send the mini app link to user - SIMPLE VERSION"""
+    """Send the mini app link to user - FIXED VERSION"""
     user_id = str(update.effective_user.id)
     
-    # FIXED: Use your actual Render URL here
-    render_url = "https://test-bot-1-4ao0.onrender.com"  # ← CHANGE THIS
+    # Get Render URL from environment variable
+    # IMPORTANT: Add RENDER_URL to your .env file
+    render_url = os.getenv('RENDER_URL', 'https://test-bot-1-4ao0.onrender.com')
     
-    # Generate simple token (no JWT for now)
-    token = f"user_{user_id}_temp"
+    # Generate token
+    token = f"user_{user_id}_{int(time.time())}"
     
-    # FIXED: Correct URL without /mini_app
+    # Create mini app URL
     mini_app_url = f"{render_url}/mini_app?token={token}"
     
+    # Create WebApp info
+    web_app_info = WebAppInfo(url=mini_app_url)
+    
+    # Create keyboard with WebApp button
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 Open Web App", web_app=WebAppInfo(url=mini_app_url))],
-        [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)]
+        [InlineKeyboardButton("🌐 Open Web App", web_app=web_app_info)],
+        [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)],
+        [InlineKeyboardButton("🔄 Refresh", callback_data='refresh_mini_app')]
     ])
     
+    # Send message with WebApp button
     await update.message.reply_text(
-        "🌐 Opening Web App...",
-        reply_markup=keyboard
+        "🌐 *Christian Vent Web App*\n\n"
+        "Click the button below to open our web interface:",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN
     )
 
 def main():
@@ -4533,52 +4545,111 @@ def main():
 # ========== SIMPLE MINI APP IN BOT.PY ==========
 @flask_app.route('/mini_app')
 def mini_app_page():
-    """Simple mini app page"""
-    return '''
+    """Simple mini app page - DYNAMIC VERSION"""
+    # Get bot username from environment
+    bot_username = BOT_USERNAME  # This should be loaded from your environment
+    
+    return f'''
     <!DOCTYPE html>
     <html>
     <head>
         <title>Christian Vent Mini App</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            body {
+            body {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                height: 100vh;
+                min-height: 100vh;
                 margin: 0;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 font-family: Arial, sans-serif;
                 color: white;
-            }
-            .card {
+                padding: 20px;
+            }}
+            .card {{
                 background: rgba(255,255,255,0.1);
                 padding: 40px;
                 border-radius: 20px;
                 text-align: center;
                 backdrop-filter: blur(10px);
-            }
-            h1 { font-size: 36px; margin-bottom: 20px; }
-            .btn {
+                max-width: 500px;
+                width: 100%;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            }}
+            h1 {{ 
+                font-size: 36px; 
+                margin-bottom: 20px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }}
+            .btn {{
                 background: white;
                 color: #667eea;
-                padding: 12px 24px;
+                padding: 15px 30px;
                 border-radius: 10px;
                 text-decoration: none;
                 display: inline-block;
                 margin: 10px;
                 font-weight: bold;
-            }
+                font-size: 16px;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+            }}
+            .btn:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                border-color: white;
+            }}
+            .telegram-btn {{
+                background: #0088cc;
+                color: white;
+            }}
+            .status {{
+                margin-top: 20px;
+                padding: 10px;
+                background: rgba(255,255,255,0.2);
+                border-radius: 10px;
+                font-size: 14px;
+            }}
         </style>
     </head>
     <body>
         <div class="card">
             <h1>✝️ Christian Vent</h1>
             <p>Web Interface is Working! 🎉</p>
+            
             <div style="margin-top: 30px;">
-                <a href="https://t.me/test_bot_1_bot" class="btn">📱 Open Bot</a>
-                <a href="https://t.me/test_bot_1_bot?start=ask" class="btn">📝 Share Thought</a>
+                <a href="https://t.me/{bot_username}" class="btn telegram-btn">📱 Open Bot</a>
+                <a href="https://t.me/{bot_username}?start=ask" class="btn">📝 Share Thought</a>
+            </div>
+            
+            <div class="status">
+                <p>Connected to: @{bot_username}</p>
+                <p>Click "Open Bot" to launch Telegram</p>
             </div>
         </div>
+        
+        <script>
+            // Simple script to enhance user experience
+            document.addEventListener('DOMContentLoaded', function() {{
+                console.log('Mini App loaded for bot: @{bot_username}');
+                
+                // Add click tracking
+                const buttons = document.querySelectorAll('.btn');
+                buttons.forEach(button => {{
+                    button.addEventListener('click', function(e) {{
+                        console.log('Button clicked:', this.textContent);
+                    }});
+                }});
+                
+                // Check if we're in Telegram WebApp
+                if (window.Telegram && window.Telegram.WebApp) {{
+                    Telegram.WebApp.ready();
+                    Telegram.WebApp.expand();
+                    console.log('Running in Telegram WebApp');
+                }}
+            }});
+        </script>
     </body>
     </html>
     '''
