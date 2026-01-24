@@ -4467,7 +4467,7 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Get Render URL from environment variable
     # IMPORTANT: Add RENDER_URL to your .env file
-    render_url = os.getenv('RENDER_URL', 'https://test-bot-1-4ao0.onrender.com')
+    render_url = os.getenv('RENDER_URL')
     
     # Generate token
     token = f"user_{user_id}_{int(time.time())}"
