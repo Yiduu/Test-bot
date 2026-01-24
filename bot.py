@@ -3822,17 +3822,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif query.data == 'execute_broadcast':
             await execute_broadcast(update, context)    
-                elif query.data.startswith('reject_post_'):
-                    try:
-                        post_id = int(query.data.split('_')[-1])
-                        logger.info(f"Admin {user_id} rejecting post {post_id}")
+                
+        elif query.data.startswith('reject_post_'):
+            try:
+                post_id = int(query.data.split('_')[-1])
+                    logger.info(f"Admin {user_id} rejecting post {post_id}")
                         await reject_post(update, context, post_id)
                     except ValueError:
                         await query.answer("❌ Invalid post ID", show_alert=True)
                     except Exception as e:
                         logger.error(f"Error in reject_post handler: {e}")
-                        await query.answer("❌ Error rejecting post", show_alert=True)
-            
+                        await query.answer("❌ Error rejecting post", show_alert=True)                                    
         
         elif query.data == 'inbox':
             await show_inbox(update, context, 1)
