@@ -1,883 +1,147 @@
-<!-- templates/mini_app.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Christian Vent - Mini App</title>
+    <title>{{ app_name }} - Web App</title>
+    <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: {{ primary_color }};
+            --bg: {{ background_color }};
+            --text: {{ text_color }};
+            --secondary: #3A4A50;
+            --card: #2E3A40;
+            --border: #3A4A50;
+        }
+    </style>
 </head>
 <body>
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <div class="header-left">
-                <div class="logo">
-                    <i class="fas fa-cross"></i>
-                    <span>Christian Vent</span>
-                </div>
+            <div class="header-content">
+                <h1 class="app-title">✝️ {{ app_name }}</h1>
+                <p class="app-subtitle">A safe space for Christian venting</p>
             </div>
-            <div class="header-right">
-                <button class="btn-icon" onclick="toggleDarkMode()">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <button class="btn-icon" onclick="refreshApp()">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
+            <div class="user-section" id="userSection">
+                <!-- User info will be loaded here -->
             </div>
         </header>
 
-        <!-- Loading Screen -->
-        <div id="loadingScreen" class="loading-screen">
-            <div class="spinner"></div>
-            <p>Loading Christian Vent...</p>
-        </div>
-
         <!-- Main Content -->
-        <div id="mainContent" class="main-content" style="display: none;">
-            <!-- Navigation -->
-            <nav class="app-nav">
-                <div class="nav-tabs">
-                    <button class="nav-tab active" data-tab="dashboard">
-                        <i class="fas fa-home"></i>
-                        <span>Dashboard</span>
-                    </button>
-                    <button class="nav-tab" data-tab="posts">
-                        <i class="fas fa-newspaper"></i>
-                        <span>Posts</span>
-                    </button>
-                    <button class="nav-tab" data-tab="share">
-                        <i class="fas fa-plus-circle"></i>
-                        <span>Share</span>
-                    </button>
-                    <button class="nav-tab" data-tab="profile">
-                        <i class="fas fa-user"></i>
-                        <span>Profile</span>
-                    </button>
-                    <button class="nav-tab" data-tab="messages">
-                        <i class="fas fa-inbox"></i>
-                        <span id="messagesBadge" class="badge"></span>
-                    </button>
-                </div>
+        <main class="main-content">
+            <!-- Navigation Tabs -->
+            <nav class="tab-navigation">
+                <button class="tab-btn active" data-tab="feed">📖 Feed</button>
+                <button class="tab-btn" data-tab="vent">✍️ Vent</button>
+                <button class="tab-btn" data-tab="leaderboard">🏆 Leaderboard</button>
+                <button class="tab-btn" data-tab="profile">👤 Profile</button>
             </nav>
 
-            <!-- Tab Contents -->
+            <!-- Tab Content -->
             <div class="tab-content">
-                <!-- Dashboard Tab -->
-                <div id="dashboardTab" class="tab-pane active">
-                    <div class="welcome-card">
-                        <h2>Welcome, <span id="userName">User</span>! 👋</h2>
-                        <p>Share your thoughts with the Christian community</p>
+                <!-- Feed Tab -->
+                <div id="feed-tab" class="tab-pane active">
+                    <div class="section-header">
+                        <h2>Recent Vents</h2>
+                        <button class="refresh-btn" id="refreshFeed">🔄 Refresh</button>
                     </div>
-
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #4f46e5;">
-                                <i class="fas fa-star"></i>
-                            </div>
-                            <div class="stat-info">
-                                <h3 id="userPoints">0</h3>
-                                <p>Points</p>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #10b981;">
-                                <i class="fas fa-file-alt"></i>
-                            </div>
-                            <div class="stat-info">
-                                <h3 id="userPosts">0</h3>
-                                <p>Posts</p>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #f59e0b;">
-                                <i class="fas fa-comments"></i>
-                            </div>
-                            <div class="stat-info">
-                                <h3 id="userComments">0</h3>
-                                <p>Comments</p>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #8b5cf6;">
-                                <i class="fas fa-users"></i>
-                            </div>
-                            <div class="stat-info">
-                                <h3 id="userFollowers">0</h3>
-                                <p>Followers</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="section">
-                        <h3><i class="fas fa-fire"></i> Trending Now</h3>
-                        <div id="trendingPosts" class="posts-list">
-                            <!-- Posts will load here -->
-                        </div>
-                    </div>
-
-                    <div class="section">
-                        <h3><i class="fas fa-trophy"></i> Top Contributors</h3>
-                        <div id="leaderboardPreview" class="leaderboard-preview">
-                            <!-- Leaderboard will load here -->
-                        </div>
+                    <div class="feed-container" id="feedContainer">
+                        <!-- Posts will be loaded here -->
+                        <div class="loading-spinner">Loading...</div>
                     </div>
                 </div>
 
-                <!-- Posts Tab -->
-                <div id="postsTab" class="tab-pane">
-                    <div class="tab-header">
-                        <h2><i class="fas fa-newspaper"></i> Recent Posts</h2>
-                        <div class="tab-actions">
-                            <select id="categoryFilter" class="filter-select">
-                                <option value="all">All Categories</option>
-                                <!-- Categories will load here -->
-                            </select>
-                        </div>
-                    </div>
-                    <div id="allPosts" class="posts-list">
-                        <!-- All posts will load here -->
-                    </div>
-                </div>
-
-                <!-- Share Tab -->
-                <div id="shareTab" class="tab-pane">
-                    <div class="create-post-card">
-                        <h2><i class="fas fa-edit"></i> Share Your Thought</h2>
+                <!-- Vent Tab -->
+                <div id="vent-tab" class="tab-pane">
+                    <div class="vent-form-container">
+                        <h2>Share Your Burden</h2>
+                        <p class="form-description">You are anonymous here. Share what's on your heart.</p>
                         
                         <div class="form-group">
-                            <label for="postCategory">Category</label>
-                            <select id="postCategory" class="form-select">
-                                <!-- Categories will load here -->
+                            <select id="categorySelect" class="category-select">
+                                <option value="PrayForMe">🙏 Pray For Me</option>
+                                <option value="Bible">📖 Bible Study</option>
+                                <option value="WorkLife">💼 Work and Life</option>
+                                <option value="SpiritualLife">🕊️ Spiritual Life</option>
+                                <option value="ChristianChallenges">⚔️ Christian Challenges</option>
+                                <option value="Relationship">❤️ Relationship</option>
+                                <option value="Marriage">💍 Marriage</option>
+                                <option value="Youth">👥 Youth</option>
+                                <option value="Finance">💰 Finance</option>
+                                <option value="Other" selected>📝 Other</option>
                             </select>
                         </div>
 
                         <div class="form-group">
-                            <label for="postContent">Your Message</label>
-                            <textarea id="postContent" class="form-textarea" 
-                                      placeholder="What's on your mind? Share your thoughts, prayers, or questions..."
-                                      rows="6"></textarea>
-                            <div class="char-count">
-                                <span id="charCount">0</span>/1000 characters
+                            <textarea 
+                                id="ventText" 
+                                class="vent-textarea" 
+                                placeholder="What's on your heart? (Anonymous sharing)"
+                                rows="8"
+                                maxlength="5000"
+                            ></textarea>
+                            <div class="textarea-footer">
+                                <span id="charCount">0/5000</span>
+                                <span class="privacy-note">Your identity is protected</span>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label>Add Media (Optional)</label>
-                            <div class="media-options">
-                                <button class="media-btn" onclick="attachPhoto()">
-                                    <i class="fas fa-camera"></i> Photo
-                                </button>
-                                <button class="media-btn" onclick="attachVoice()">
-                                    <i class="fas fa-microphone"></i> Voice
-                                </button>
-                            </div>
+                            <button id="submitVent" class="submit-btn">
+                                Post Anonymously
+                            </button>
+                            <p class="form-note">Posts are reviewed before appearing in the feed</p>
                         </div>
+                    </div>
+                </div>
 
-                        <button class="btn-primary btn-block" onclick="submitPost()">
-                            <i class="fas fa-paper-plane"></i> Submit for Approval
-                        </button>
-
-                        <div class="post-guidelines">
-                            <h4><i class="fas fa-info-circle"></i> Guidelines</h4>
-                            <ul>
-                                <li>Be respectful and kind</li>
-                                <li>Keep discussions Christian-centered</li>
-                                <li>No offensive content</li>
-                                <li>Posts are reviewed before publishing</li>
-                            </ul>
-                        </div>
+                <!-- Leaderboard Tab -->
+                <div id="leaderboard-tab" class="tab-pane">
+                    <div class="section-header">
+                        <h2>Top Contributors</h2>
+                        <button class="refresh-btn" id="refreshLeaderboard">🔄</button>
+                    </div>
+                    <div class="leaderboard-container" id="leaderboardContainer">
+                        <!-- Leaderboard will be loaded here -->
+                        <div class="loading-spinner">Loading...</div>
                     </div>
                 </div>
 
                 <!-- Profile Tab -->
-                <div id="profileTab" class="tab-pane">
-                    <div class="profile-card">
-                        <div class="profile-header">
-                            <div class="profile-avatar" id="profileAvatar">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <div class="profile-info">
-                                <h2 id="profileName">Anonymous</h2>
-                                <div class="profile-badge" id="profileAura">⚪️</div>
-                                <p class="profile-id">User ID: <span id="profileId">---</span></p>
-                            </div>
-                        </div>
-
-                        <div class="profile-stats">
-                            <div class="profile-stat">
-                                <strong id="statPoints">0</strong>
-                                <span>Points</span>
-                            </div>
-                            <div class="profile-stat">
-                                <strong id="statPosts">0</strong>
-                                <span>Posts</span>
-                            </div>
-                            <div class="profile-stat">
-                                <strong id="statFollowers">0</strong>
-                                <span>Followers</span>
-                            </div>
-                            <div class="profile-stat">
-                                <strong id="statFollowing">0</strong>
-                                <span>Following</span>
-                            </div>
-                        </div>
-
-                        <div class="profile-actions">
-                            <button class="btn-secondary" onclick="editProfile()">
-                                <i class="fas fa-edit"></i> Edit Profile
-                            </button>
-                            <button class="btn-secondary" onclick="viewMyPosts()">
-                                <i class="fas fa-list"></i> My Posts
-                            </button>
-                            <button class="btn-secondary" onclick="viewLeaderboard()">
-                                <i class="fas fa-trophy"></i> Leaderboard
-                            </button>
-                        </div>
-
-                        <div class="profile-settings">
-                            <h3><i class="fas fa-cog"></i> Settings</h3>
-                            <div class="setting-item">
-                                <div>
-                                    <strong>Notifications</strong>
-                                    <p>Receive updates on your posts and comments</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" id="notificationsToggle">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            <div class="setting-item">
-                                <div>
-                                    <strong>Privacy</strong>
-                                    <p>Make your profile public</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" id="privacyToggle">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Messages Tab -->
-                <div id="messagesTab" class="tab-pane">
-                    <div class="tab-header">
-                        <h2><i class="fas fa-inbox"></i> Messages</h2>
-                        <button class="btn-icon" onclick="refreshMessages()">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                    </div>
-
-                    <div id="messagesList" class="messages-list">
-                        <!-- Messages will load here -->
-                    </div>
-
-                    <div class="empty-state" id="emptyMessages" style="display: none;">
-                        <i class="fas fa-envelope-open"></i>
-                        <h3>No messages yet</h3>
-                        <p>When someone sends you a message, it will appear here</p>
+                <div id="profile-tab" class="tab-pane">
+                    <div class="profile-container" id="profileContainer">
+                        <!-- Profile will be loaded here -->
+                        <div class="loading-spinner">Loading...</div>
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
 
-        <!-- Modal for Post Details -->
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="stats-bar" id="statsBar">
+                <!-- Stats will be loaded here -->
+            </div>
+            <p class="footer-note">
+                Connect with our community in Telegram: 
+                <a href="https://t.me/{{ bot_username }}" target="_blank" class="telegram-link">
+                    @{{ bot_username }}
+                </a>
+            </p>
+        </footer>
+
+        <!-- Modal for post details -->
         <div id="postModal" class="modal">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h3 id="modalTitle">Post Details</h3>
-                    <button class="close-btn" onclick="closeModal()">&times;</button>
-                </div>
-                <div class="modal-body" id="modalBody">
-                    <!-- Post content will load here -->
-                </div>
+                <span class="close-modal">&times;</span>
+                <div id="modalContent"></div>
             </div>
         </div>
-
-        <!-- Toast Notification -->
-        <div id="toast" class="toast"></div>
     </div>
 
-    <script>
-        // Telegram Web App Integration
-        const tg = window.Telegram.WebApp;
-        
-        // App State
-        let currentUser = null;
-        let authToken = null;
-        let isDarkMode = false;
-
-        // Initialize Telegram Web App
-        tg.expand();
-        tg.setHeaderColor('#4f46e5');
-        tg.setBackgroundColor('#f8fafc');
-        tg.enableClosingConfirmation();
-
-        // Initialize the app
-        async function initApp() {
-            try {
-                // Show loading screen
-                showLoading();
-                
-                // Get user data from Telegram
-                const initData = tg.initDataUnsafe;
-                const userId = initData?.user?.id;
-                
-                if (!userId) {
-                    showError('Please open this app from Telegram bot');
-                    return;
-                }
-
-                // Authenticate and get token
-                const authResponse = await fetch('/api/auth', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ user_id: userId.toString() })
-                });
-
-                if (!authResponse.ok) {
-                    throw new Error('Authentication failed');
-                }
-
-                const authData = await authResponse.json();
-                authToken = authData.token;
-
-                // Load user profile
-                await loadUserProfile();
-                
-                // Load initial data
-                await loadDashboardData();
-                await loadCategories();
-                await loadRecentPosts();
-                await loadLeaderboardPreview();
-                await loadMessages();
-
-                // Hide loading, show main content
-                hideLoading();
-                document.getElementById('mainContent').style.display = 'block';
-
-                // Setup Telegram Main Button
-                tg.MainButton.setText('Open in Bot');
-                tg.MainButton.onClick(() => {
-                    tg.openTelegramLink(`https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}`);
-                });
-                tg.MainButton.show();
-
-            } catch (error) {
-                console.error('Initialization error:', error);
-                showError('Failed to load app. Please try again.');
-            }
-        }
-
-        // Load user profile
-        async function loadUserProfile() {
-            try {
-                const response = await fetch(`/api/user/profile?token=${authToken}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    currentUser = data.data;
-                    updateProfileUI();
-                }
-            } catch (error) {
-                console.error('Error loading profile:', error);
-            }
-        }
-
-        // Update profile UI
-        function updateProfileUI() {
-            if (!currentUser) return;
-            
-            // Update dashboard
-            document.getElementById('userName').textContent = currentUser.name;
-            document.getElementById('userPoints').textContent = currentUser.rating;
-            document.getElementById('userPosts').textContent = currentUser.stats.posts;
-            document.getElementById('userComments').textContent = currentUser.stats.comments;
-            document.getElementById('userFollowers').textContent = currentUser.stats.followers;
-            
-            // Update profile tab
-            document.getElementById('profileName').textContent = currentUser.name;
-            document.getElementById('profileAvatar').innerHTML = currentUser.sex || '<i class="fas fa-user"></i>';
-            document.getElementById('profileAura').textContent = currentUser.aura;
-            document.getElementById('profileId').textContent = currentUser.id.substring(0, 8) + '...';
-            document.getElementById('statPoints').textContent = currentUser.rating;
-            document.getElementById('statPosts').textContent = currentUser.stats.posts;
-            document.getElementById('statFollowers').textContent = currentUser.stats.followers;
-            document.getElementById('statFollowing').textContent = currentUser.stats.following;
-            
-            // Update settings toggles
-            document.getElementById('notificationsToggle').checked = currentUser.settings.notifications;
-            document.getElementById('privacyToggle').checked = currentUser.settings.privacy;
-        }
-
-        // Load dashboard data
-        async function loadDashboardData() {
-            // Already handled in loadUserProfile
-        }
-
-        // Load categories
-        async function loadCategories() {
-            try {
-                const response = await fetch(`/api/categories?token=${authToken}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    const categories = data.data;
-                    
-                    // Update category filter
-                    const filterSelect = document.getElementById('categoryFilter');
-                    const postCategory = document.getElementById('postCategory');
-                    
-                    categories.forEach(category => {
-                        const option = document.createElement('option');
-                        option.value = category.code;
-                        option.textContent = `${category.icon} ${category.name}`;
-                        
-                        filterSelect.appendChild(option.cloneNode(true));
-                        postCategory.appendChild(option);
-                    });
-                }
-            } catch (error) {
-                console.error('Error loading categories:', error);
-            }
-        }
-
-        // Load recent posts
-        async function loadRecentPosts() {
-            try {
-                const response = await fetch(`/api/posts/recent?token=${authToken}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    const posts = data.data;
-                    const trendingContainer = document.getElementById('trendingPosts');
-                    const allPostsContainer = document.getElementById('allPosts');
-                    
-                    trendingContainer.innerHTML = '';
-                    allPostsContainer.innerHTML = '';
-                    
-                    if (posts.length === 0) {
-                        trendingContainer.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-newspaper"></i>
-                                <p>No posts yet. Be the first to share!</p>
-                            </div>
-                        `;
-                        return;
-                    }
-                    
-                    // Display first 3 posts in trending
-                    posts.slice(0, 3).forEach(post => {
-                        trendingContainer.appendChild(createPostElement(post));
-                    });
-                    
-                    // Display all posts
-                    posts.forEach(post => {
-                        allPostsContainer.appendChild(createPostElement(post, true));
-                    });
-                }
-            } catch (error) {
-                console.error('Error loading posts:', error);
-            }
-        }
-
-        // Create post element
-        function createPostElement(post, showFullContent = false) {
-            const postEl = document.createElement('div');
-            postEl.className = 'post-item';
-            postEl.onclick = () => openPostModal(post);
-            
-            const content = showFullContent ? post.full_content : post.content;
-            
-            postEl.innerHTML = `
-                <div class="post-header">
-                    <div class="post-author">
-                        <span class="author-avatar">${post.author.sex || '👤'}</span>
-                        <div>
-                            <strong>${post.author.name}</strong>
-                            <small>${post.time_ago} • ${post.category}</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="post-content">
-                    ${escapeHtml(content)}
-                </div>
-                <div class="post-footer">
-                    <div class="post-stats">
-                        <span><i class="fas fa-comment"></i> ${post.comments}</span>
-                    </div>
-                    <button class="btn-sm" onclick="event.stopPropagation(); viewPostInBot(${post.id})">
-                        View <i class="fas fa-external-link-alt"></i>
-                    </button>
-                </div>
-            `;
-            
-            return postEl;
-        }
-
-        // Load leaderboard preview
-        async function loadLeaderboardPreview() {
-            try {
-                const response = await fetch(`/api/leaderboard?token=${authToken}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    const leaderboard = document.getElementById('leaderboardPreview');
-                    leaderboard.innerHTML = '';
-                    
-                    data.data.top_users.slice(0, 5).forEach(user => {
-                        const userEl = document.createElement('div');
-                        userEl.className = 'leaderboard-item';
-                        
-                        userEl.innerHTML = `
-                            <div class="rank-badge">${user.rank}</div>
-                            <div class="user-info">
-                                <strong>${user.name}</strong>
-                                <small>${user.points} points</small>
-                            </div>
-                            <div class="user-aura">${user.aura}</div>
-                        `;
-                        
-                        leaderboard.appendChild(userEl);
-                    });
-                    
-                    // Add "View More" button
-                    const viewMoreBtn = document.createElement('button');
-                    viewMoreBtn.className = 'btn-secondary btn-block';
-                    viewMoreBtn.textContent = 'View Full Leaderboard';
-                    viewMoreBtn.onclick = viewLeaderboard;
-                    leaderboard.appendChild(viewMoreBtn);
-                }
-            } catch (error) {
-                console.error('Error loading leaderboard:', error);
-            }
-        }
-
-        // Load messages
-        async function loadMessages() {
-            try {
-                const response = await fetch(`/api/messages?token=${authToken}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    const messages = data.data.messages;
-                    const messagesList = document.getElementById('messagesList');
-                    const emptyMessages = document.getElementById('emptyMessages');
-                    const badge = document.getElementById('messagesBadge');
-                    
-                    // Update badge
-                    if (data.data.unread_count > 0) {
-                        badge.textContent = data.data.unread_count;
-                        badge.style.display = 'inline';
-                    } else {
-                        badge.style.display = 'none';
-                    }
-                    
-                    // Clear and update messages list
-                    messagesList.innerHTML = '';
-                    
-                    if (messages.length === 0) {
-                        emptyMessages.style.display = 'block';
-                        return;
-                    }
-                    
-                    emptyMessages.style.display = 'none';
-                    
-                    messages.forEach(message => {
-                        const messageEl = document.createElement('div');
-                        messageEl.className = `message-item ${message.is_read ? '' : 'unread'}`;
-                        messageEl.onclick = () => viewMessage(message);
-                        
-                        const time = new Date(message.timestamp).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                        });
-                        
-                        messageEl.innerHTML = `
-                            <div class="message-avatar">${message.sender_sex || '👤'}</div>
-                            <div class="message-content">
-                                <div class="message-header">
-                                    <strong>${message.sender_name}</strong>
-                                    <small>${time}</small>
-                                </div>
-                                <p>${escapeHtml(message.content.substring(0, 100))}${message.content.length > 100 ? '...' : ''}</p>
-                            </div>
-                            ${message.is_read ? '' : '<div class="unread-dot"></div>'}
-                        `;
-                        
-                        messagesList.appendChild(messageEl);
-                    });
-                }
-            } catch (error) {
-                console.error('Error loading messages:', error);
-            }
-        }
-
-        // Submit new post
-        async function submitPost() {
-            const category = document.getElementById('postCategory').value;
-            const content = document.getElementById('postContent').value.trim();
-            
-            if (!content) {
-                showToast('Please enter your thought', 'error');
-                return;
-            }
-            
-            if (content.length > 1000) {
-                showToast('Post is too long (max 1000 characters)', 'error');
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/create/post', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ content, category })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showToast('Post submitted for approval!', 'success');
-                    document.getElementById('postContent').value = '';
-                    document.getElementById('charCount').textContent = '0';
-                    
-                    // Switch to posts tab
-                    switchTab('posts');
-                    
-                    // Refresh posts
-                    setTimeout(loadRecentPosts, 1000);
-                } else {
-                    showToast(data.error || 'Failed to submit post', 'error');
-                }
-            } catch (error) {
-                console.error('Error submitting post:', error);
-                showToast('Network error. Please try again.', 'error');
-            }
-        }
-
-        // Tab switching
-        function switchTab(tabName) {
-            // Update active tab
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.classList.remove('active');
-                if (tab.dataset.tab === tabName) {
-                    tab.classList.add('active');
-                }
-            });
-            
-            // Show active pane
-            document.querySelectorAll('.tab-pane').forEach(pane => {
-                pane.classList.remove('active');
-            });
-            document.getElementById(`${tabName}Tab`).classList.add('active');
-            
-            // Load data for the tab if needed
-            if (tabName === 'messages') {
-                loadMessages();
-            }
-        }
-
-        // Open post modal
-        function openPostModal(post) {
-            document.getElementById('modalTitle').textContent = 'Post Details';
-            
-            const modalBody = document.getElementById('modalBody');
-            modalBody.innerHTML = `
-                <div class="post-detail">
-                    <div class="post-header">
-                        <div class="post-author">
-                            <span class="author-avatar">${post.author.sex || '👤'}</span>
-                            <div>
-                                <strong>${post.author.name}</strong>
-                                <small>${post.time_ago} • ${post.category}</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="post-content-full">
-                        ${escapeHtml(post.full_content)}
-                    </div>
-                    <div class="post-actions">
-                        <button class="btn-primary" onclick="viewPostInBot(${post.id})">
-                            <i class="fas fa-comment"></i> View Comments
-                        </button>
-                        <button class="btn-secondary" onclick="sharePost(${post.id})">
-                            <i class="fas fa-share"></i> Share
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('postModal').style.display = 'flex';
-        }
-
-        // Close modal
-        function closeModal() {
-            document.getElementById('postModal').style.display = 'none';
-        }
-
-        // View post in bot
-        function viewPostInBot(postId) {
-            tg.openTelegramLink(`https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=viewpost_${postId}`);
-        }
-
-        // View leaderboard
-        function viewLeaderboard() {
-            tg.openTelegramLink(`https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=leaderboard`);
-        }
-
-        // View message
-        function viewMessage(message) {
-            // Mark as read and open in bot
-            tg.openTelegramLink(`https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=inbox`);
-        }
-
-        // Edit profile
-        function editProfile() {
-            tg.openTelegramLink(`https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=profile`);
-        }
-
-        // View my posts
-        function viewMyPosts() {
-            tg.openTelegramLink(`https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=myposts`);
-        }
-
-        // Refresh app
-        function refreshApp() {
-            showLoading();
-            setTimeout(() => {
-                initApp();
-            }, 500);
-        }
-
-        // Refresh messages
-        function refreshMessages() {
-            loadMessages();
-            showToast('Messages refreshed', 'info');
-        }
-
-        // Toggle dark mode
-        function toggleDarkMode() {
-            isDarkMode = !isDarkMode;
-            document.body.classList.toggle('dark-mode', isDarkMode);
-            
-            const icon = document.querySelector('.btn-icon .fa-moon');
-            if (isDarkMode) {
-                icon.classList.remove('fa-moon');
-                icon.classList.add('fa-sun');
-                tg.setBackgroundColor('#1a1a1a');
-            } else {
-                icon.classList.remove('fa-sun');
-                icon.classList.add('fa-moon');
-                tg.setBackgroundColor('#f8fafc');
-            }
-        }
-
-        // Character count for textarea
-        document.getElementById('postContent').addEventListener('input', function() {
-            const count = this.value.length;
-            document.getElementById('charCount').textContent = count;
-            
-            if (count > 1000) {
-                document.getElementById('charCount').style.color = '#ef4444';
-            } else {
-                document.getElementById('charCount').style.color = '#64748b';
-            }
-        });
-
-        // Attach photo
-        function attachPhoto() {
-            showToast('Photo attachment coming soon', 'info');
-        }
-
-        // Attach voice
-        function attachVoice() {
-            showToast('Voice attachment coming soon', 'info');
-        }
-
-        // Share post
-        function sharePost(postId) {
-            showToast('Share feature coming soon', 'info');
-        }
-
-        // UI Helpers
-        function showLoading() {
-            document.getElementById('loadingScreen').style.display = 'flex';
-            document.getElementById('mainContent').style.display = 'none';
-        }
-
-        function hideLoading() {
-            document.getElementById('loadingScreen').style.display = 'none';
-        }
-
-        function showError(message) {
-            const mainContent = document.getElementById('mainContent');
-            mainContent.innerHTML = `
-                <div class="error-screen">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h2>Error</h2>
-                    <p>${message}</p>
-                    <button class="btn-primary" onclick="location.reload()">
-                        Try Again
-                    </button>
-                </div>
-            `;
-            mainContent.style.display = 'block';
-            hideLoading();
-        }
-
-        function showToast(message, type = 'info') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `toast ${type}`;
-            toast.style.display = 'block';
-            
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, 3000);
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Initialize when Telegram is ready
-        if (tg.initDataUnsafe) {
-            tg.ready();
-            initApp();
-        } else {
-            // For development outside Telegram
-            document.addEventListener('DOMContentLoaded', () => {
-                // Simulate Telegram environment
-                tg.initDataUnsafe = {
-                    user: { id: 123456789, username: 'test_user' }
-                };
-                initApp();
-            });
-        }
-
-        // Tab click handlers
-        document.querySelectorAll('.nav-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                switchTab(tab.dataset.tab);
-            });
-        });
-
-        // Close modal on background click
-        document.getElementById('postModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
-        });
-    </script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
