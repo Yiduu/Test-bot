@@ -3,7 +3,7 @@ import os
 import json
 import jwt
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from functools import wraps
 import psycopg2
@@ -97,7 +97,7 @@ def generate_token(user_id):
     """Generate JWT token for authentication"""
     payload = {
         'user_id': user_id,
-        'exp': datetime.utcnow() + timedelta(hours=24)
+        'exp': datetime.now(timezone.utc) + timedelta(hours=24)
     }
     return jwt.encode(payload, mini_app.secret_key, algorithm='HS256')
 
