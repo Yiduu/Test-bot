@@ -1,1 +1,43 @@
-
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ app_name }} - Mini App</title>
+    <style>
+        body {
+            background: #272F32;
+            color: #E0E0E0;
+            font-family: sans-serif;
+            text-align: center;
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 500px;
+        }
+        h1 {
+            color: #BF970B;
+            margin-bottom: 1rem;
+        }
+        .btn {
+            background: #BF970B;
+            color: #272F32;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 1rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✝️ {{ app_name }}</h1>
+        <p>Please open this mini app from the Telegram bot to access all features.</p>
+        <a href="https://t.me/{{ bot_username }}" class="btn">Open Bot</a>
+    </div>
+</body>
+</html>
