@@ -130,6 +130,41 @@ def init_db():
                     PRIMARY KEY (blocker_id, blocked_id)
                 )
                 ''')
+                # Add to database initialization:
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS scheduled_broadcasts (
+                        broadcast_id SERIAL PRIMARY KEY,
+                        scheduled_by TEXT,
+                        content TEXT,
+                        media_type TEXT,
+                        media_id TEXT,
+                        scheduled_time TIMESTAMP,
+                        status TEXT DEFAULT 'scheduled',
+                        target_group TEXT DEFAULT 'all',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                async def schedule_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                    """Schedule a broadcast for later"""
+                    # Similar to execute_broadcast but stores in database
+                    pass
+                
+                async def check_scheduled_broadcasts(context: ContextTypes.DEFAULT_TYPE):
+                    """Check and send scheduled broadcasts"""
+                    scheduled = db_fetch_all('''
+                        SELECT * FROM scheduled_broadcasts 
+                        WHERE status = 'scheduled' 
+                        AND scheduled_time <= CURRENT_TIMESTAMP
+                    ''')
+                    
+                    for broadcast in scheduled:
+                        # Send the broadcast
+                        # Update status to 'sent'
+                        pass
+                
+                # Schedule this to run every minute in main():
+                job_queue.run_repeating(check_scheduled_broadcasts, interval=60, first=10)
 
                 # ---------------- Database Schema Migration ----------------
                 # Check if thread_from_post_id column exists, if not add it
@@ -810,27 +845,50 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.message.reply_text("❌ You don't have permission to access this.")
         return
     
+    # Get statistics for display
     pending_posts = db_fetch_one("SELECT COUNT(*) as count FROM posts WHERE approved = FALSE")
     pending_count = pending_posts['count'] if pending_posts else 0
     
+    total_users = db_fetch_one("SELECT COUNT(*) as count FROM users")
+    users_count = total_users['count'] if total_users else 0
+    
+    active_today = db_fetch_one('''
+        SELECT COUNT(DISTINCT user_id) as count 
+        FROM (
+            SELECT author_id as user_id FROM posts WHERE DATE(timestamp) = CURRENT_DATE
+            UNION 
+            SELECT author_id as user_id FROM comments WHERE DATE(timestamp) = CURRENT_DATE
+        ) AS active_users
+    ''')
+    active_count = active_today['count'] if active_today else 0
+    
     keyboard = [
         [InlineKeyboardButton(f"📝 Pending Posts ({pending_count})", callback_data='admin_pending')],
-        [InlineKeyboardButton("📊 Statistics", callback_data='admin_stats')],
-        [InlineKeyboardButton("👥 User Management", callback_data='admin_users')],
-        [InlineKeyboardButton("📢 Broadcast", callback_data='admin_broadcast')],
-        [InlineKeyboardButton("🔙 Back", callback_data='settings')]
+        [InlineKeyboardButton(f"👥 Users: {users_count}", callback_data='admin_users')],
+        [InlineKeyboardButton(f"📊 Statistics", callback_data='admin_stats')],
+        [InlineKeyboardButton("📢 Send Broadcast", callback_data='admin_broadcast')],  # This is the broadcast button
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data='menu')]
     ]
+    
+    text = (
+        f"🛠 *Admin Panel*\n\n"
+        f"📊 *Quick Stats:*\n"
+        f"• Pending Posts: {pending_count}\n"
+        f"• Total Users: {users_count}\n"
+        f"• Active Today: {active_count}\n\n"
+        f"Select an option below:"
+    )
     
     try:
         if update.callback_query:
             await update.callback_query.edit_message_text(
-                "🛠 *Admin Panel*",
+                text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode=ParseMode.MARKDOWN
             )
         else:
             await update.message.reply_text(
-                "🛠 *Admin Panel*",
+                text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -841,6 +899,350 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif update.callback_query:
             await update.callback_query.message.reply_text("❌ Error loading admin panel.")
 
+async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the broadcast process"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    
+    # Verify admin permissions
+    user = db_fetch_one("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
+    if not user or not user['is_admin']:
+        await query.answer("❌ You don't have permission to access this.", show_alert=True)
+        return
+    
+    # Set broadcast state
+    context.user_data['broadcasting'] = True
+    context.user_data['broadcast_step'] = 'waiting_for_content'
+    
+    # Show broadcast options
+    keyboard = [
+        [
+            InlineKeyboardButton("📝 Text Broadcast", callback_data='broadcast_text'),
+            InlineKeyboardButton("🖼️ Photo Broadcast", callback_data='broadcast_photo')
+        ],
+        [
+            InlineKeyboardButton("🎵 Voice Broadcast", callback_data='broadcast_voice'),
+            InlineKeyboardButton("📎 Other Media", callback_data='broadcast_other')
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data='admin_panel')
+        ]
+    ]
+    
+    text = (
+        "📢 *Send Broadcast Message*\n\n"
+        "Choose the type of broadcast you want to send:\n\n"
+        "📝 *Text* - Send a text message to all users\n"
+        "🖼️ *Photo* - Send a photo with caption\n"
+        "🎵 *Voice* - Send a voice message\n"
+        "📎 *Other* - Send other media types\n\n"
+        "_All users will receive this message._"
+    )
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def handle_broadcast_type(update: Update, context: ContextTypes.DEFAULT_TYPE, broadcast_type: str):
+    """Handle broadcast type selection"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    
+    # Verify admin permissions
+    user = db_fetch_one("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
+    if not user or not user['is_admin']:
+        await query.answer("❌ You don't have permission to access this.", show_alert=True)
+        return
+    
+    # Set broadcast type
+    context.user_data['broadcast_type'] = broadcast_type
+    context.user_data['broadcast_step'] = 'waiting_for_content'
+    
+    # Ask for content based on type
+    if broadcast_type == 'text':
+        prompt = "✍️ *Please type your broadcast message:*\n\nYou can use markdown formatting."
+    elif broadcast_type == 'photo':
+        prompt = "🖼️ *Please send a photo with caption:*\n\nSend a photo and add a caption (optional)."
+    elif broadcast_type == 'voice':
+        prompt = "🎵 *Please send a voice message:*\n\nSend a voice message with optional caption."
+    else:  # other
+        prompt = "📎 *Please send your media:*\n\nYou can send any media type (photo, video, document, etc.) with optional caption."
+    
+    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data='admin_panel')]]
+    
+    await query.edit_message_text(
+        prompt,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show broadcast confirmation with preview"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    if not broadcast_data:
+        await query.answer("❌ No broadcast data found.", show_alert=True)
+        return
+    
+    # Get user count for confirmation
+    total_users = db_fetch_one("SELECT COUNT(*) as count FROM users")
+    users_count = total_users['count'] if total_users else 0
+    
+    text = (
+        f"📢 *Broadcast Confirmation*\n\n"
+        f"📊 *Recipients:* {users_count} users\n"
+        f"📋 *Type:* {broadcast_data.get('type', 'text').title()}\n\n"
+        f"📝 *Preview:*\n"
+    )
+    
+    # Add content preview
+    content = broadcast_data.get('content', '') or broadcast_data.get('caption', '')
+    if content:
+        if len(content) > 200:
+            preview = content[:197] + "..."
+        else:
+            preview = content
+        text += f"{preview}\n\n"
+    
+    text += "_Are you sure you want to send this broadcast to all users?_"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Send Broadcast", callback_data='execute_broadcast'),
+            InlineKeyboardButton("✏️ Edit", callback_data='admin_broadcast')
+        ],
+        [
+            InlineKeyboardButton("❌ Cancel", callback_data='admin_panel')
+        ]
+    ]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Execute the broadcast to all users"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    broadcast_data = context.user_data.get('broadcast_data', {})
+    
+    if not broadcast_data:
+        await query.answer("❌ No broadcast data found.", show_alert=True)
+        return
+    
+    # Show processing message
+    status_message = await query.edit_message_text(
+        "📤 *Starting Broadcast...*\n\nPreparing to send to all users...",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    
+    # Get all users
+    all_users = db_fetch_all("SELECT user_id FROM users WHERE user_id != %s", (user_id,))
+    total_users = len(all_users)
+    
+    if total_users == 0:
+        await status_message.edit_text(
+            "❌ No users to broadcast to.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+    
+    # Track statistics
+    success_count = 0
+    failed_count = 0
+    blocked_count = 0
+    
+    # Prepare message based on type
+    message_type = broadcast_data.get('type', 'text')
+    content = broadcast_data.get('content', '')
+    media_id = broadcast_data.get('media_id')
+    caption = broadcast_data.get('caption', '')
+    
+    # Send to users in batches
+    batch_size = 30  # Telegram rate limit
+    current_batch = 0
+    
+    for i, user in enumerate(all_users):
+        try:
+            # Update progress every batch
+            if i % batch_size == 0:
+                current_batch = i // batch_size + 1
+                total_batches = (total_users + batch_size - 1) // batch_size
+                progress = int((i / total_users) * 100)
+                
+                await status_message.edit_text(
+                    f"📤 *Broadcasting...*\n\n"
+                    f"📊 Progress: {progress}%\n"
+                    f"✅ Sent: {success_count}\n"
+                    f"❌ Failed: {failed_count}\n"
+                    f"⏸️ Blocked: {blocked_count}\n"
+                    f"🎯 Batch: {current_batch}/{total_batches}\n\n"
+                    f"_Please wait..._",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            
+            # Send based on message type
+            if message_type == 'text':
+                await context.bot.send_message(
+                    chat_id=user['user_id'],
+                    text=content,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                
+            elif message_type == 'photo' and media_id:
+                await context.bot.send_photo(
+                    chat_id=user['user_id'],
+                    photo=media_id,
+                    caption=caption,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                
+            elif message_type == 'voice' and media_id:
+                await context.bot.send_voice(
+                    chat_id=user['user_id'],
+                    voice=media_id,
+                    caption=caption,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                
+            elif message_type == 'document' and media_id:
+                await context.bot.send_document(
+                    chat_id=user['user_id'],
+                    document=media_id,
+                    caption=caption,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                
+            elif message_type == 'video' and media_id:
+                await context.bot.send_video(
+                    chat_id=user['user_id'],
+                    video=media_id,
+                    caption=caption,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            
+            success_count += 1
+            
+            # Small delay to respect rate limits
+            if i % 10 == 0:
+                await asyncio.sleep(0.1)
+                
+        except BadRequest as e:
+            if "blocked" in str(e).lower() or "Forbidden" in str(e):
+                blocked_count += 1
+            else:
+                failed_count += 1
+                logger.error(f"Failed to send broadcast to {user['user_id']}: {e}")
+        except Exception as e:
+            failed_count += 1
+            logger.error(f"Failed to send broadcast to {user['user_id']}: {e}")
+    
+    # Broadcast complete
+    completion_time = datetime.now().strftime("%H:%M:%S")
+    
+    # Clean up
+    if 'broadcasting' in context.user_data:
+        del context.user_data['broadcasting']
+    if 'broadcast_step' in context.user_data:
+        del context.user_data['broadcast_step']
+    if 'broadcast_type' in context.user_data:
+        del context.user_data['broadcast_type']
+    if 'broadcast_data' in context.user_data:
+        del context.user_data['broadcast_data']
+    
+    # Show final report
+    report_text = (
+        f"✅ *Broadcast Complete!*\n\n"
+        f"📅 Completed: {completion_time}\n"
+        f"👥 Total Users: {total_users}\n"
+        f"✅ Successfully Sent: {success_count}\n"
+        f"❌ Failed: {failed_count}\n"
+        f"⏸️ Blocked/Inactive: {blocked_count}\n"
+        f"📈 Success Rate: {((success_count / total_users) * 100):.1f}%\n\n"
+        f"🎯 _Broadcast delivered to {success_count} active users._"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 Send Another", callback_data='admin_broadcast')],
+        [InlineKeyboardButton("🛠️ Admin Panel", callback_data='admin_panel')],
+        [InlineKeyboardButton("📱 Main Menu", callback_data='menu')]
+    ]
+    
+    await status_message.edit_text(
+        report_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.MARKDOWN
+    )
+async def advanced_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Advanced broadcast with targeting options"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = str(query.from_user.id)
+    
+    # Verify admin permissions
+    user = db_fetch_one("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
+    if not user or not user['is_admin']:
+        await query.answer("❌ You don't have permission to access this.", show_alert=True)
+        return
+    
+    # Get user statistics for targeting
+    total_users = db_fetch_one("SELECT COUNT(*) as count FROM users")
+    active_users = db_fetch_one('''
+        SELECT COUNT(DISTINCT user_id) as count 
+        FROM (
+            SELECT author_id as user_id FROM posts WHERE DATE(timestamp) >= CURRENT_DATE - INTERVAL '7 days'
+            UNION 
+            SELECT author_id as user_id FROM comments WHERE DATE(timestamp) >= CURRENT_DATE - INTERVAL '7 days'
+        ) AS active_users
+    ''')
+    
+    text = (
+        "🎯 *Advanced Broadcast*\n\n"
+        f"📊 *User Statistics:*\n"
+        f"• Total Users: {total_users['count'] if total_users else 0}\n"
+        f"• Active (7 days): {active_users['count'] if active_users else 0}\n\n"
+        "*Select targeting options:*"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🌍 All Users", callback_data='target_all'),
+            InlineKeyboardButton("🎯 Active Users", callback_data='target_active')
+        ],
+        [
+            InlineKeyboardButton("👤 Specific User", callback_data='target_specific'),
+            InlineKeyboardButton("🏷️ By Category", callback_data='target_category')
+        ],
+        [
+            InlineKeyboardButton("📝 Text Only", callback_data='broadcast_text'),
+            InlineKeyboardButton("🖼️ With Media", callback_data='broadcast_photo')
+        ],
+        [
+            InlineKeyboardButton("🔙 Simple Broadcast", callback_data='admin_broadcast'),
+            InlineKeyboardButton("❌ Cancel", callback_data='admin_panel')
+        ]
+    ]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode=ParseMode.MARKDOWN
+    )
 async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
@@ -3409,17 +3811,27 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.error(f"Error in approve_post handler: {e}")
                 await query.answer("❌ Error approving post", show_alert=True)
+        # Admin broadcast handlers
+        elif query.data == 'admin_broadcast':
+            await start_broadcast(update, context)
             
-        elif query.data.startswith('reject_post_'):
-            try:
-                post_id = int(query.data.split('_')[-1])
-                logger.info(f"Admin {user_id} rejecting post {post_id}")
-                await reject_post(update, context, post_id)
-            except ValueError:
-                await query.answer("❌ Invalid post ID", show_alert=True)
-            except Exception as e:
-                logger.error(f"Error in reject_post handler: {e}")
-                await query.answer("❌ Error rejecting post", show_alert=True)
+        elif query.data.startswith('broadcast_'):
+            # Handle broadcast type selection
+            broadcast_type = query.data.split('_', 1)[1]
+            await handle_broadcast_type(update, context, broadcast_type)
+            
+        elif query.data == 'execute_broadcast':
+            await execute_broadcast(update, context)    
+                elif query.data.startswith('reject_post_'):
+                    try:
+                        post_id = int(query.data.split('_')[-1])
+                        logger.info(f"Admin {user_id} rejecting post {post_id}")
+                        await reject_post(update, context, post_id)
+                    except ValueError:
+                        await query.answer("❌ Invalid post ID", show_alert=True)
+                    except Exception as e:
+                        logger.error(f"Error in reject_post handler: {e}")
+                        await query.answer("❌ Error rejecting post", show_alert=True)
             
         
         elif query.data == 'inbox':
@@ -3638,6 +4050,75 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # FIX: Handle pending post editing (NEW CODE ENDS HERE)
 
     # If user doesn't exist, create them
+        # Handle broadcast messages from admin
+    if user and user['is_admin'] and context.user_data.get('broadcasting'):
+        broadcast_step = context.user_data.get('broadcast_step')
+        broadcast_type = context.user_data.get('broadcast_type', 'text')
+        
+        if broadcast_step == 'waiting_for_content':
+            # Store broadcast data
+            broadcast_data = {
+                'type': broadcast_type,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            if update.message.text and broadcast_type == 'text':
+                broadcast_data['content'] = update.message.text
+                context.user_data['broadcast_data'] = broadcast_data
+                await confirm_broadcast(update, context)
+                return
+                
+            elif update.message.photo and broadcast_type == 'photo':
+                photo = update.message.photo[-1]
+                broadcast_data['media_id'] = photo.file_id
+                broadcast_data['caption'] = update.message.caption or ""
+                context.user_data['broadcast_data'] = broadcast_data
+                await confirm_broadcast(update, context)
+                return
+                
+            elif update.message.voice and broadcast_type == 'voice':
+                voice = update.message.voice
+                broadcast_data['media_id'] = voice.file_id
+                broadcast_data['caption'] = update.message.caption or ""
+                context.user_data['broadcast_data'] = broadcast_data
+                await confirm_broadcast(update, context)
+                return
+                
+            elif broadcast_type == 'other':
+                # Handle various media types
+                if update.message.document:
+                    broadcast_data['type'] = 'document'
+                    broadcast_data['media_id'] = update.message.document.file_id
+                    broadcast_data['caption'] = update.message.caption or ""
+                elif update.message.video:
+                    broadcast_data['type'] = 'video'
+                    broadcast_data['media_id'] = update.message.video.file_id
+                    broadcast_data['caption'] = update.message.caption or ""
+                elif update.message.audio:
+                    broadcast_data['type'] = 'audio'
+                    broadcast_data['media_id'] = update.message.audio.file_id
+                    broadcast_data['caption'] = update.message.caption or ""
+                elif update.message.text:
+                    broadcast_data['type'] = 'text'
+                    broadcast_data['content'] = update.message.text
+                else:
+                    await update.message.reply_text(
+                        "❌ Unsupported media type. Please send text, photo, voice, video, or document.",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                    return
+                
+                context.user_data['broadcast_data'] = broadcast_data
+                await confirm_broadcast(update, context)
+                return
+                
+            else:
+                # Mismatch between expected and actual content type
+                await update.message.reply_text(
+                    f"❌ Expected {broadcast_type} but received different content. Please try again or cancel.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
     if not user:
         anon = create_anonymous_name(user_id)
         is_admin = str(user_id) == str(ADMIN_ID)
@@ -3935,7 +4416,16 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         return
+    # Create application with job queue
+    app = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
     
+    # Get job queue for scheduled tasks
+    job_queue = app.job_queue
+    
+    # Add job for checking scheduled broadcasts (if implemented)
+    # job_queue.run_repeating(check_scheduled_broadcasts, interval=60, first=10)
+    
+    # Add your handlers
     app = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("start", start))
