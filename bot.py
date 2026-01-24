@@ -4522,6 +4522,59 @@ def main():
     # Start polling
     logger.info("Starting bot polling...")
     app.run_polling()
+
+# ========== SIMPLE MINI APP IN BOT.PY ==========
+@flask_app.route('/mini_app')
+def mini_app_page():
+    """Simple mini app page"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Christian Vent Mini App</title>
+        <style>
+            body {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                height: 100vh;
+                margin: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: Arial, sans-serif;
+                color: white;
+            }
+            .card {
+                background: rgba(255,255,255,0.1);
+                padding: 40px;
+                border-radius: 20px;
+                text-align: center;
+                backdrop-filter: blur(10px);
+            }
+            h1 { font-size: 36px; margin-bottom: 20px; }
+            .btn {
+                background: white;
+                color: #667eea;
+                padding: 12px 24px;
+                border-radius: 10px;
+                text-decoration: none;
+                display: inline-block;
+                margin: 10px;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>✝️ Christian Vent</h1>
+            <p>Web Interface is Working! 🎉</p>
+            <div style="margin-top: 30px;">
+                <a href="https://t.me/test_bot_1_bot" class="btn">📱 Open Bot</a>
+                <a href="https://t.me/test_bot_1_bot?start=ask" class="btn">📝 Share Thought</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
 if __name__ == "__main__": 
     # Initialize database first
     try:
