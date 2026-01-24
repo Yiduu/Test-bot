@@ -5853,6 +5853,8 @@ def mini_app_page():
 
 # ==================== MINI APP API ENDPOINTS ====================
 
+# ==================== MINI APP API ENDPOINTS ====================
+
 @flask_app.route('/api/mini-app/submit-vent', methods=['POST'])
 def mini_app_submit_vent():
     """API endpoint for submitting vents from mini app"""
