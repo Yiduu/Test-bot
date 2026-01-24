@@ -4452,44 +4452,26 @@ async def set_bot_commands(app):
     await app.bot.set_my_commands(commands)
 
 async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send the mini app link to user"""
+    """Send the mini app link to user - SIMPLE VERSION"""
     user_id = str(update.effective_user.id)
     
-    # Generate JWT token
-    secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here-change-this')
-    expiration = datetime.now(timezone.utc) + timedelta(hours=24)
+    # FIXED: Use your actual Render URL here
+    render_url = "https://test-bot-1-4ao0.onrender.com"  # ← CHANGE THIS
     
-    payload = {
-        'user_id': user_id,
-        'exp': expiration
-    }
+    # Generate simple token (no JWT for now)
+    token = f"user_{user_id}_temp"
     
-    token = jwt.encode(payload, secret_key, algorithm='HS256')
+    # FIXED: Correct URL without /mini_app
+    mini_app_url = f"{render_url}?user_id={user_id}&token={token}"
     
-    # Get your Render URL (update this with your actual URL)
-    render_url = os.getenv('RENDER_URL')
-    mini_app_url = f"{render_url}/mini_app?token={token}"
-    
-    # For local testing, you can use this instead:
-    # mini_app_url = f"http://localhost:5001?token={token}"
-    
-    # Create keyboard with web app button
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Open Web App", web_app=WebAppInfo(url=mini_app_url))],
         [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)]
     ])
     
     await update.message.reply_text(
-        "🌐 *Christian Vent Web App*\n\n"
-        "Access your profile, view recent posts, and more through our web interface!\n\n"
-        "Features:\n"
-        "• 📊 Dashboard with your stats\n"
-        "• 📝 Create new posts\n"
-        "• 👤 View and edit profile\n"
-        "• 📬 Check messages\n"
-        "• 🏆 View leaderboard",
-        reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN
+        "🌐 Opening Web App...",
+        reply_markup=keyboard
     )
 
 def main():
