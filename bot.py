@@ -5754,7 +5754,7 @@ def mini_app_page():
                                 </button>
                             </div>
                         </div>
-                    `).join('')}
+                    `).join('')}}
                 `;
             }}
             
