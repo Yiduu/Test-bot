@@ -24,7 +24,7 @@ from telegram.helpers import escape_markdown
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
 import threading
-from flask import Flask, jsonify 
+from flask import Flask, jsonify, request, redirect, render_template_string 
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import random
@@ -4462,37 +4462,37 @@ async def set_bot_commands(app):
     await app.bot.set_my_commands(commands)
 
 async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send the mini app link to user - FIXED VERSION"""
+    """Send the mini app link to user"""
     user_id = str(update.effective_user.id)
     
-    # Get Render URL from environment variable
-    # IMPORTANT: Add RENDER_URL to your .env file
-    render_url = os.getenv('RENDER_URL')
+    # Get your Render URL from environment or use the bot's username
+    # If you have a separate mini app service, use that URL here
+    mini_app_service_url = f"https://{BOT_USERNAME}-mini-app.onrender.com"  # Adjust based on your actual URL
     
-    # Generate token
-    token = f"user_{user_id}_{int(time.time())}"
+    # Create the WebApp URL
+    mini_app_url = f"{mini_app_service_url}/mini_app"
     
-    # Create mini app URL
-    mini_app_url = f"{render_url}/mini_app?token={token}"
-    
-    # Create WebApp info
+    # Create WebApp button
     web_app_info = WebAppInfo(url=mini_app_url)
     
-    # Create keyboard with WebApp button
+    # Create keyboard
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Open Web App", web_app=web_app_info)],
         [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)],
-        [InlineKeyboardButton("🔄 Refresh", callback_data='refresh_mini_app')]
+        [InlineKeyboardButton("🤖 Back to Bot", callback_data='menu')]
     ])
     
-    # Send message with WebApp button
     await update.message.reply_text(
         "🌐 *Christian Vent Web App*\n\n"
-        "Click the button below to open our web interface:",
+        "Click the button below to open our web interface. "
+        "You can:\n"
+        "• Share anonymous vents\n"
+        "• View community posts\n"
+        "• See the leaderboard\n"
+        "• Manage your profile",
         reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN
     )
-
 def main():
     # Initialize database before starting the bot
     try:
@@ -4545,28 +4545,198 @@ def main():
 # In bot.py, replace the simple /mini_app route with this:
 
 @flask_app.route('/mini_app')
-def mini_app_home():
-    """Main mini app page - redirects to the real mini app"""
-    user_id = request.args.get('user_id', '')
+def mini_app_page():
+    """Simple mini app landing page that redirects to actual mini app"""
+    # Get bot username from environment
+    bot_username = BOT_USERNAME
     
-    # Generate token for user
-    if user_id:
-        import jwt
-        from datetime import datetime, timedelta, timezone
-        
-        payload = {
-            'user_id': user_id,
-            'exp': datetime.now(timezone.utc) + timedelta(hours=24)
-        }
-        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-        
-        # Redirect to mini app with token
-        return redirect(f'/static/mini_app/index.html?token={token}')
+    # Create a simple HTML page with a button to open the real mini app
+    # This will be served from the mini app server
+    mini_app_url = f"https://{BOT_USERNAME}-mini-app.onrender.com"  # Adjust based on your actual mini app URL
     
-    # If no user_id, show basic page
-    return render_template('mini_app_landing.html', 
-                         bot_username=BOT_USERNAME,
-                         app_name=APP_NAME)
+    html_content = f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Christian Vent - Mini App</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {{
+                background: #272F32;
+                color: #E0E0E0;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                min-height: 100vh;
+                margin: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }}
+            .container {{
+                max-width: 500px;
+                text-align: center;
+                padding: 40px;
+                background: #2E3A40;
+                border-radius: 20px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                border: 1px solid #3A4A50;
+            }}
+            h1 {{
+                color: #BF970B;
+                font-size: 2.5rem;
+                margin-bottom: 10px;
+                font-weight: 300;
+            }}
+            .subtitle {{
+                color: #E0E0E0;
+                opacity: 0.8;
+                margin-bottom: 30px;
+                font-size: 1.1rem;
+                line-height: 1.6;
+            }}
+            .btn {{
+                background: #BF970B;
+                color: #272F32;
+                padding: 15px 30px;
+                border-radius: 10px;
+                text-decoration: none;
+                display: inline-block;
+                margin: 10px;
+                font-weight: 600;
+                font-size: 1.1rem;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+                cursor: pointer;
+            }}
+            .btn:hover {{
+                background: #d4a90f;
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(191, 151, 11, 0.3);
+            }}
+            .btn.secondary {{
+                background: transparent;
+                color: #BF970B;
+                border: 2px solid #BF970B;
+            }}
+            .btn.secondary:hover {{
+                background: rgba(191, 151, 11, 0.1);
+            }}
+            .info-box {{
+                background: rgba(191, 151, 11, 0.1);
+                border: 1px solid rgba(191, 151, 11, 0.3);
+                border-radius: 10px;
+                padding: 15px;
+                margin: 20px 0;
+                text-align: left;
+            }}
+            .features {{
+                text-align: left;
+                margin: 30px 0;
+            }}
+            .feature {{
+                display: flex;
+                align-items: center;
+                margin-bottom: 15px;
+                padding: 10px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 8px;
+            }}
+            .feature-icon {{
+                background: rgba(191, 151, 11, 0.2);
+                color: #BF970B;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 15px;
+                font-size: 1.2rem;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>✝️ Christian Vent</h1>
+            <p class="subtitle">A safe space for Christian anonymous venting</p>
+            
+            <div class="info-box">
+                <p>Our full web app is currently being upgraded with new features.</p>
+                <p>In the meantime, you can use our Telegram bot for all features.</p>
+            </div>
+            
+            <div style="margin: 30px 0;">
+                <a href="https://t.me/{bot_username}" class="btn">
+                    📱 Open in Telegram Bot
+                </a>
+                <br>
+                <a href="https://t.me/{bot_username}?start=ask" class="btn secondary">
+                    ✍️ Share Your Thoughts
+                </a>
+            </div>
+            
+            <div class="features">
+                <h3 style="color: #BF970B; margin-bottom: 15px;">Available Features:</h3>
+                
+                <div class="feature">
+                    <div class="feature-icon">📝</div>
+                    <div>
+                        <strong>Anonymous Venting</strong>
+                        <p>Share your thoughts without revealing identity</p>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">💬</div>
+                    <div>
+                        <strong>Community Support</strong>
+                        <p>Receive comments and prayers from others</p>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">🏆</div>
+                    <div>
+                        <strong>Leaderboard</strong>
+                        <p>See top contributors in the community</p>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-icon">👤</div>
+                    <div>
+                        <strong>Profile & Aura</strong>
+                        <p>Track your contributions and growth</p>
+                    </div>
+                </div>
+            </div>
+            
+            <p style="opacity: 0.7; font-size: 0.9rem; margin-top: 30px;">
+                Full web app coming soon with enhanced features!
+            </p>
+        </div>
+        
+        <script>
+            // Simple script to enhance user experience
+            document.addEventListener('DOMContentLoaded', function() {{
+                console.log('Christian Vent Mini App loaded');
+                
+                // Check if we're in Telegram WebApp
+                if (window.Telegram && window.Telegram.WebApp) {{
+                    Telegram.WebApp.ready();
+                    Telegram.WebApp.expand();
+                    console.log('Running in Telegram WebApp');
+                    
+                    // Show a welcome message
+                    Telegram.WebApp.showAlert('Welcome to Christian Vent!');
+                }}
+            }});
+        </script>
+    </body>
+    </html>
+    '''
+    
+    return render_template_string(html_content)
 if __name__ == "__main__": 
     # Initialize database first
     try:
