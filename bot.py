@@ -4542,117 +4542,31 @@ def main():
     logger.info("Starting bot polling...")
     app.run_polling()
 
-# ========== SIMPLE MINI APP IN BOT.PY ==========
+# In bot.py, replace the simple /mini_app route with this:
+
 @flask_app.route('/mini_app')
-def mini_app_page():
-    """Simple mini app page - DYNAMIC VERSION"""
-    # Get bot username from environment
-    bot_username = BOT_USERNAME  # This should be loaded from your environment
+def mini_app_home():
+    """Main mini app page - redirects to the real mini app"""
+    user_id = request.args.get('user_id', '')
     
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Christian Vent Mini App</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                margin: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-family: Arial, sans-serif;
-                color: white;
-                padding: 20px;
-            }}
-            .card {{
-                background: rgba(255,255,255,0.1);
-                padding: 40px;
-                border-radius: 20px;
-                text-align: center;
-                backdrop-filter: blur(10px);
-                max-width: 500px;
-                width: 100%;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            }}
-            h1 {{ 
-                font-size: 36px; 
-                margin-bottom: 20px;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            }}
-            .btn {{
-                background: white;
-                color: #667eea;
-                padding: 15px 30px;
-                border-radius: 10px;
-                text-decoration: none;
-                display: inline-block;
-                margin: 10px;
-                font-weight: bold;
-                font-size: 16px;
-                transition: all 0.3s ease;
-                border: 2px solid transparent;
-            }}
-            .btn:hover {{
-                transform: translateY(-3px);
-                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-                border-color: white;
-            }}
-            .telegram-btn {{
-                background: #0088cc;
-                color: white;
-            }}
-            .status {{
-                margin-top: 20px;
-                padding: 10px;
-                background: rgba(255,255,255,0.2);
-                border-radius: 10px;
-                font-size: 14px;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>✝️ Christian Vent</h1>
-            <p>Web Interface is Working! 🎉</p>
-            
-            <div style="margin-top: 30px;">
-                <a href="https://t.me/{bot_username}" class="btn telegram-btn">📱 Open Bot</a>
-                <a href="https://t.me/{bot_username}?start=ask" class="btn">📝 Share Thought</a>
-            </div>
-            
-            <div class="status">
-                <p>Connected to: @{bot_username}</p>
-                <p>Click "Open Bot" to launch Telegram</p>
-            </div>
-        </div>
+    # Generate token for user
+    if user_id:
+        import jwt
+        from datetime import datetime, timedelta, timezone
         
-        <script>
-            // Simple script to enhance user experience
-            document.addEventListener('DOMContentLoaded', function() {{
-                console.log('Mini App loaded for bot: @{bot_username}');
-                
-                // Add click tracking
-                const buttons = document.querySelectorAll('.btn');
-                buttons.forEach(button => {{
-                    button.addEventListener('click', function(e) {{
-                        console.log('Button clicked:', this.textContent);
-                    }});
-                }});
-                
-                // Check if we're in Telegram WebApp
-                if (window.Telegram && window.Telegram.WebApp) {{
-                    Telegram.WebApp.ready();
-                    Telegram.WebApp.expand();
-                    console.log('Running in Telegram WebApp');
-                }}
-            }});
-        </script>
-    </body>
-    </html>
-    '''
+        payload = {
+            'user_id': user_id,
+            'exp': datetime.now(timezone.utc) + timedelta(hours=24)
+        }
+        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+        
+        # Redirect to mini app with token
+        return redirect(f'/static/mini_app/index.html?token={token}')
+    
+    # If no user_id, show basic page
+    return render_template('mini_app_landing.html', 
+                         bot_username=BOT_USERNAME,
+                         app_name=APP_NAME)
 if __name__ == "__main__": 
     # Initialize database first
     try:
