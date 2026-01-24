@@ -26,7 +26,7 @@ from telegram.error import BadRequest
 import threading
 from flask import Flask, jsonify 
 from contextlib import closing
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import time
 import asyncio
@@ -4457,7 +4457,7 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Generate JWT token
     secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here-change-this')
-    expiration = datetime.utcnow() + timedelta(hours=24)
+    expiration = datetime.now(timezone.utc) + timedelta(hours=24)
     
     payload = {
         'user_id': user_id,
