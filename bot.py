@@ -1,3 +1,9 @@
+# Add these imports at the top of bot.py (after the existing imports)
+import jwt
+import requests
+from telegram import WebAppInfo
+from threading import Thread
+import subprocess
 import os 
 import logging
 import psycopg2
@@ -4429,6 +4435,7 @@ from telegram import BotCommand
 async def set_bot_commands(app):
     commands = [
         BotCommand("start", "Start the bot and open the menu"),
+        BotCommand("webapp", "🌐 Open Web App"),
         BotCommand("menu", "📱 Open main menu"),
         BotCommand("profile", "View your profile"),
         BotCommand("ask", "Share your thoughts"),
@@ -4444,6 +4451,46 @@ async def set_bot_commands(app):
     
     await app.bot.set_my_commands(commands)
 
+async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send the mini app link to user"""
+    user_id = str(update.effective_user.id)
+    
+    # Generate JWT token
+    secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
+    expiration = datetime.utcnow() + timedelta(hours=24)
+    
+    payload = {
+        'user_id': user_id,
+        'exp': expiration
+    }
+    
+    token = jwt.encode(payload, secret_key, algorithm='HS256')
+    
+    # Get your Render URL (update this with your actual URL)
+    render_url = os.getenv('RENDER_URL', 'https://your-app.onrender.com')
+    mini_app_url = f"{render_url}/mini_app?token={token}"
+    
+    # For testing locally
+    # mini_app_url = f"http://localhost:5001?token={token}"
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 Open Web App", web_app=WebAppInfo(url=mini_app_url))],
+        [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)]
+    ])
+    
+    await update.message.reply_text(
+        "🌐 *Christian Vent Web App*\n\n"
+        "Access your profile, view recent posts, and more through our web interface!\n\n"
+        "Features:\n"
+        "• 📊 Dashboard with your stats\n"
+        "• 📝 Create new posts\n"
+        "• 👤 View and edit profile\n"
+        "• 📬 Check messages\n"
+        "• 🏆 View leaderboard",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
 def main():
     # Initialize database before starting the bot
     try:
@@ -4452,19 +4499,33 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         return
-    # Create application with job queue
+    
+    # Start Mini App in a separate thread
+    def run_mini_app():
+        from mini_app import mini_app
+        port = int(os.environ.get('MINI_APP_PORT', 5001))
+        mini_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    
+    mini_app_thread = Thread(target=run_mini_app, daemon=True)
+    mini_app_thread.start()
+    logger.info("Mini App started on port 5001")
+    
+    # Start Flask server for health checks in another thread
+    port = int(os.environ.get('PORT', 5000))
+    flask_thread = Thread(
+        target=lambda: flask_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False),
+        daemon=True
+    )
+    flask_thread.start()
+    logger.info("Flask health check server started on port 5000")
+    
+    # Create and run Telegram bot
     app = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
-    
-    # Get job queue for scheduled tasks
-    job_queue = app.job_queue
-    
-    # Add job for checking scheduled broadcasts (if implemented)
-    # job_queue.run_repeating(check_scheduled_broadcasts, interval=60, first=10)
     
     # Add your handlers
-    app = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("webapp", mini_app_command))  # Add this
     app.add_handler(CommandHandler("leaderboard", show_leaderboard))
     app.add_handler(CommandHandler("settings", show_settings))
     app.add_handler(CommandHandler("admin", admin_panel))
@@ -4472,13 +4533,12 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_private_message_text))
-
-
+    
     app.add_error_handler(error_handler)
     
     # Start polling
-    app.run_polling() 
-
+    logger.info("Starting bot polling...")
+    app.run_polling()
 if __name__ == "__main__": 
     # Initialize database first
     try:
