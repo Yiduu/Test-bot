@@ -4,6 +4,8 @@ services:
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
+    web: python bot.py
+    mini-app: python mini_app.py
     envVars:
       - key: DATABASE_URL
         sync: false
