@@ -984,14 +984,35 @@ async def handle_broadcast_type(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show broadcast confirmation with preview"""
-    query = update.callback_query
-    await query.answer()
+    # Check if this is a callback query or regular message
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        message = query.message
+        user_id = str(query.from_user.id)
+        is_callback = True
+    else:
+        # Handle case when called from handle_message
+        message = update.message
+        user_id = str(update.effective_user.id)
+        is_callback = False
     
-    user_id = str(query.from_user.id)
     broadcast_data = context.user_data.get('broadcast_data', {})
     
     if not broadcast_data:
-        await query.answer("❌ No broadcast data found.", show_alert=True)
+        if is_callback:
+            await update.callback_query.answer("❌ No broadcast data found.", show_alert=True)
+        else:
+            await update.message.reply_text("❌ No broadcast data found.")
+        return
+    
+    # Verify admin permissions
+    user = db_fetch_one("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
+    if not user or not user['is_admin']:
+        if is_callback:
+            await update.callback_query.answer("❌ You don't have permission to access this.", show_alert=True)
+        else:
+            await update.message.reply_text("❌ You don't have permission to access this.")
         return
     
     # Get user count for confirmation
@@ -1026,18 +1047,32 @@ async def confirm_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     
-    await query.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.MARKDOWN
-    )
+    if is_callback:
+        await update.callback_query.edit_message_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.MARKDOWN
+        )
 
 async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Execute the broadcast to all users"""
-    query = update.callback_query
-    await query.answer()
+    # Check if this is a callback query
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        status_message = query.message
+    else:
+        # This shouldn't happen from messages, but handle it
+        await update.message.reply_text("❌ This action can only be triggered from the confirmation menu.")
+        return
     
-    user_id = str(query.from_user.id)
+    user_id = str(update.effective_user.id)
     broadcast_data = context.user_data.get('broadcast_data', {})
     
     if not broadcast_data:
@@ -1050,7 +1085,7 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
     
-    # Get all users
+    # Get all users (exclude the sender)
     all_users = db_fetch_all("SELECT user_id FROM users WHERE user_id != %s", (user_id,))
     total_users = len(all_users)
     
@@ -1074,7 +1109,6 @@ async def execute_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Send to users in batches
     batch_size = 30  # Telegram rate limit
-    current_batch = 0
     
     for i, user in enumerate(all_users):
         try:
@@ -4051,6 +4085,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # If user doesn't exist, create them
         # Handle broadcast messages from admin
+        # Handle broadcast messages from admin
     if user and user['is_admin'] and context.user_data.get('broadcasting'):
         broadcast_step = context.user_data.get('broadcast_step')
         broadcast_type = context.user_data.get('broadcast_type', 'text')
@@ -4065,6 +4100,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if update.message.text and broadcast_type == 'text':
                 broadcast_data['content'] = update.message.text
                 context.user_data['broadcast_data'] = broadcast_data
+                # Now call confirm_broadcast with the regular message update
                 await confirm_broadcast(update, context)
                 return
                 
