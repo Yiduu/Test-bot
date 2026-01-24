@@ -26,7 +26,7 @@ from telegram.error import BadRequest
 import threading
 from flask import Flask, jsonify 
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import time
 import asyncio
@@ -4456,7 +4456,7 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
     # Generate JWT token
-    secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
+    secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here-change-this')
     expiration = datetime.utcnow() + timedelta(hours=24)
     
     payload = {
@@ -4467,12 +4467,13 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     token = jwt.encode(payload, secret_key, algorithm='HS256')
     
     # Get your Render URL (update this with your actual URL)
-    render_url = os.getenv('RENDER_URL', 'https://your-app.onrender.com')
+    render_url = os.getenv('RENDER_URL')
     mini_app_url = f"{render_url}/mini_app?token={token}"
     
-    # For testing locally
+    # For local testing, you can use this instead:
     # mini_app_url = f"http://localhost:5001?token={token}"
     
+    # Create keyboard with web app button
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Open Web App", web_app=WebAppInfo(url=mini_app_url))],
         [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)]
