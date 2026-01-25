@@ -344,18 +344,25 @@ flask_app = Flask(__name__)
 
 # ==================== FLASK ROUTES ====================
 
+# Root shows mini app
 @flask_app.route('/')
-def health_check():
-    return jsonify(status="OK", message="Christian Chat Bot is running")
+def main_page():
+    return mini_app_page()
 
 # Handle favicon request
 @flask_app.route('/favicon.ico')
 def favicon():
-    return '', 404  # Return empty 404 for favicon 
+    return '', 404  # Return empty 404 for favicon
 
+# Health check for Render
+@flask_app.route('/health')
+def health_check():
+    return jsonify(status="OK", message="Christian Chat Bot is running")
+
+# Keep uptimerobot ping
 @flask_app.route('/ping')
 def uptimerobot_ping():
-    return jsonify(status="OK", message="Pong! Bot is alive") 
+    return jsonify(status="OK", message="Pong! Bot is alive")
 
 # Create main menu keyboard with improved buttons
 main_menu = ReplyKeyboardMarkup(
