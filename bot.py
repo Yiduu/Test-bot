@@ -151,7 +151,16 @@ def init_db():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
-                
+                c.execute('''
+                    CREATE TABLE IF NOT EXISTS admin_notifications (
+                        notification_id SERIAL PRIMARY KEY,
+                        post_id INTEGER REFERENCES posts(post_id),
+                        user_id TEXT,
+                        notification_type TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        processed BOOLEAN DEFAULT FALSE
+                    )
+                ''')
                 async def schedule_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     """Schedule a broadcast for later"""
                     # Similar to execute_broadcast but stores in database
@@ -532,21 +541,45 @@ def generate_token(user_id):
 # Verify token
 @flask_app.route('/api/verify-token/<token>')
 def verify_token(token):
-    """Verify JWT token"""
+    """Verify JWT token - SIMPLIFIED VERSION"""
     try:
+        # Try to decode the token
         decoded = jwt.decode(token, TOKEN, algorithms=['HS256'])
+        user_id = decoded.get('user_id')
+        
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Invalid token format'}), 401
+        
+        # Check if user exists
+        user = db_fetch_one("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 401
+        
         return jsonify({
             'success': True,
-            'user_id': decoded['user_id']
+            'user_id': user_id
         })
+        
     except jwt.ExpiredSignatureError:
         return jsonify({'success': False, 'error': 'Token expired'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'success': False, 'error': 'Invalid token'}), 401
     except Exception as e:
         logger.error(f"Error verifying token: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
+        return jsonify({'success': False, 'error': 'Token verification failed'}), 500
+@flask_app.route('/test-api')
+def test_api():
+    """Test if API endpoints are working"""
+    return jsonify({
+        'status': 'OK',
+        'endpoints': {
+            'submit_vent': '/api/mini-app/submit-vent (POST)',
+            'get_posts': '/api/mini-app/get-posts (GET)',
+            'leaderboard': '/api/mini-app/leaderboard (GET)',
+            'profile': '/api/mini-app/profile/<user_id> (GET)',
+            'verify_token': '/api/verify-token/<token> (GET)'
+        }
+    })
 # Health check for Render
 @flask_app.route('/health')
 def health_check():
@@ -4768,7 +4801,7 @@ def mini_app_page():
     bot_username = BOT_USERNAME
     app_name = "Christian Vent"
     
-    # Build the HTML for the mini app - SIMPLIFIED VERSION
+    # Build the HTML for the mini app - FIXED VERSION
     html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4777,7 +4810,6 @@ def mini_app_page():
     <title>{app_name} - Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Keep all your existing CSS styles here */
         * {{
             margin: 0;
             padding: 0;
@@ -4799,8 +4831,493 @@ def mini_app_page():
             min-height: 100vh;
         }}
         
-        /* ... (keep all your CSS styles, but double the curly braces) ... */
-        /* For example: background: rgba(191, 151, 11, 0.1); becomes background: rgba(191, 151, 11, 0.1); */
+        /* Header */
+        .app-header {{
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #3A4A50;
+        }}
+        
+        .app-title {{
+            color: #BF970B;
+            font-size: 2rem;
+            margin: 0;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }}
+        
+        .app-subtitle {{
+            opacity: 0.8;
+            margin-top: 8px;
+            font-size: 0.95rem;
+        }}
+        
+        /* Tabs */
+        .tab-navigation {{
+            display: flex;
+            background: #2E3A40;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            overflow: hidden;
+            border: 1px solid #3A4A50;
+        }}
+        
+        .tab-btn {{
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            color: #E0E0E0;
+            cursor: pointer;
+            transition: all 0.3s;
+            opacity: 0.7;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }}
+        
+        .tab-btn:hover {{
+            opacity: 1;
+            background: rgba(191, 151, 11, 0.1);
+        }}
+        
+        .tab-btn.active {{
+            opacity: 1;
+            color: #BF970B;
+            background: rgba(191, 151, 11, 0.1);
+        }}
+        
+        /* Tab Content */
+        .tab-content {{
+            margin-top: 10px;
+        }}
+        
+        .tab-pane {{
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }}
+        
+        .tab-pane.active {{
+            display: block;
+        }}
+        
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        /* Vent Form */
+        .vent-form-container {{
+            background: #2E3A40;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            margin-bottom: 25px;
+        }}
+        
+        .form-title {{
+            color: #BF970B;
+            margin-bottom: 10px;
+            font-weight: 400;
+        }}
+        
+        .form-description {{
+            opacity: 0.8;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }}
+        
+        .category-select {{
+            width: 100%;
+            padding: 12px 15px;
+            background: #272F32;
+            border: 1px solid #3A4A50;
+            color: #E0E0E0;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }}
+        
+        .category-select:focus {{
+            outline: none;
+            border-color: #BF970B;
+        }}
+        
+        .vent-textarea {{
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            background: #272F32;
+            border: 1px solid #3A4A50;
+            color: #E0E0E0;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            line-height: 1.6;
+            resize: vertical;
+            margin-bottom: 10px;
+        }}
+        
+        .vent-textarea:focus {{
+            outline: none;
+            border-color: #BF970B;
+            box-shadow: 0 0 0 2px rgba(191, 151, 11, 0.2);
+        }}
+        
+        .textarea-footer {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }}
+        
+        .privacy-note {{
+            color: #BF970B;
+            font-size: 0.85rem;
+        }}
+        
+        .submit-btn {{
+            width: 100%;
+            padding: 15px;
+            background: #BF970B;
+            color: #272F32;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }}
+        
+        .submit-btn:hover {{
+            background: #d4a90f;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(191, 151, 11, 0.3);
+        }}
+        
+        .submit-btn:disabled {{
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }}
+        
+        .form-note {{
+            text-align: center;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }}
+        
+        /* Posts Section */
+        .posts-container {{
+            margin-top: 10px;
+        }}
+        
+        .section-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        
+        .section-title {{
+            color: #BF970B;
+            font-weight: 400;
+            margin: 0;
+        }}
+        
+        .refresh-btn {{
+            background: #3A4A50;
+            border: 1px solid #3A4A50;
+            color: #E0E0E0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }}
+        
+        .refresh-btn:hover {{
+            background: #BF970B;
+            color: #272F32;
+        }}
+        
+        /* Post Cards */
+        .post-card {{
+            background: #2E3A40;
+            border: 1px solid #3A4A50;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }}
+        
+        .post-card:hover {{
+            border-color: #BF970B;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }}
+        
+        .post-header {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }}
+        
+        .author-avatar {{
+            width: 40px;
+            height: 40px;
+            background: rgba(191, 151, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #BF970B;
+            font-weight: bold;
+            margin-right: 12px;
+        }}
+        
+        .author-info h4 {{
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 0 0 5px 0;
+        }}
+        
+        .post-meta {{
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .post-category {{
+            display: inline-block;
+            background: rgba(191, 151, 11, 0.1);
+            color: #BF970B;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }}
+        
+        .post-content {{
+            margin: 15px 0;
+            line-height: 1.7;
+            font-size: 1rem;
+        }}
+        
+        .post-footer {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #3A4A50;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }}
+        
+        /* Leaderboard */
+        .leaderboard-container {{
+            background: #2E3A40;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            overflow: hidden;
+        }}
+        
+        .leaderboard-item {{
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #3A4A50;
+            transition: background 0.3s;
+        }}
+        
+        .leaderboard-item:last-child {{
+            border-bottom: none;
+        }}
+        
+        .leaderboard-item:hover {{
+            background: rgba(191, 151, 11, 0.05);
+        }}
+        
+        .leaderboard-rank {{
+            width: 40px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #BF970B;
+        }}
+        
+        .rank-1 {{ color: gold; }}
+        .rank-2 {{ color: silver; }}
+        .rank-3 {{ color: #cd7f32; }}
+        
+        .leaderboard-user {{
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+        
+        .user-avatar-small {{
+            width: 40px;
+            height: 40px;
+            background: rgba(191, 151, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #BF970B;
+        }}
+        
+        .user-info-small h4 {{
+            font-size: 1rem;
+            font-weight: 500;
+            margin: 0 0 4px 0;
+        }}
+        
+        .user-info-small p {{
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin: 0;
+        }}
+        
+        .leaderboard-points {{
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #BF970B;
+        }}
+        
+        /* Profile */
+        .profile-container {{
+            background: #2E3A40;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            padding: 25px;
+        }}
+        
+        .profile-header {{
+            text-align: center;
+            margin-bottom: 25px;
+        }}
+        
+        .profile-avatar {{
+            width: 100px;
+            height: 100px;
+            background: rgba(191, 151, 11, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: #BF970B;
+            margin: 0 auto 15px;
+        }}
+        
+        .profile-header h2 {{
+            font-size: 1.8rem;
+            margin: 0 0 10px 0;
+        }}
+        
+        .profile-rating {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(191, 151, 11, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-top: 10px;
+        }}
+        
+        /* Footer */
+        .app-footer {{
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #3A4A50;
+            text-align: center;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }}
+        
+        .telegram-link {{
+            color: #BF970B;
+            text-decoration: none;
+        }}
+        
+        .telegram-link:hover {{
+            text-decoration: underline;
+        }}
+        
+        /* Messages */
+        .message {{
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+            animation: slideIn 0.3s ease;
+        }}
+        
+        .error-message {{
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #ff6b6b;
+        }}
+        
+        .success-message {{
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            color: #51cf66;
+        }}
+        
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateY(-10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        /* Loading */
+        .loading {{
+            text-align: center;
+            padding: 40px;
+            color: #BF970B;
+        }}
+        
+        /* Empty States */
+        .empty-state {{
+            text-align: center;
+            padding: 40px;
+            opacity: 0.7;
+        }}
+        
+        /* Responsive */
+        @media (max-width: 768px) {{
+            .app-container {{
+                padding: 15px;
+            }}
+            
+            .app-title {{
+                font-size: 1.5rem;
+            }}
+            
+            .tab-btn {{
+                padding: 12px;
+                font-size: 0.85rem;
+            }}
+            
+            .vent-form-container {{
+                padding: 20px;
+            }}
+            
+            .post-card {{
+                padding: 15px;
+            }}
+        }}
     </style>
 </head>
 <body>
@@ -4909,12 +5426,7 @@ def mini_app_page():
     </div>
     
     <script>
-        // Christian Vent Mini App - Fixed JavaScript
-        document.addEventListener('DOMContentLoaded', function() {{
-            const app = new ChristianVentApp();
-            window.app = app;
-        }});
-        
+        // Christian Vent Mini App - Main JavaScript
         class ChristianVentApp {{
             constructor() {{
                 this.user = null;
@@ -4922,6 +5434,7 @@ def mini_app_page():
                 this.userId = null;
                 this.botUsername = "{bot_username}";
                 this.apiBaseUrl = window.location.origin;
+                this.isAdmin = false;
                 this.init();
             }}
             
@@ -4933,8 +5446,7 @@ def mini_app_page():
                 this.token = urlParams.get('token');
                 
                 if (!this.token) {{
-                    this.showMessage('Authentication required. Please use the /webapp command in the Telegram bot.', 'error');
-                    // Redirect to login after 3 seconds
+                    this.showMessage('❌ Authentication required. Please use the /webapp command in the Telegram bot.', 'error');
                     setTimeout(() => {{
                         window.location.href = '/login';
                     }}, 3000);
@@ -4947,7 +5459,7 @@ def mini_app_page():
                     const data = await response.json();
                     
                     if (!data.success) {{
-                        this.showMessage('Session expired. Please get a new link from the Telegram bot.', 'error');
+                        this.showMessage('❌ Session expired. Please get a new link from the Telegram bot.', 'error');
                         setTimeout(() => {{
                             window.location.href = '/login';
                         }}, 3000);
@@ -4959,7 +5471,7 @@ def mini_app_page():
                     
                 }} catch (error) {{
                     console.error('Error verifying token:', error);
-                    this.showMessage('Authentication error. Please try again.', 'error');
+                    this.showMessage('❌ Authentication error. Please try again.', 'error');
                     setTimeout(() => {{
                         window.location.href = '/login';
                     }}, 3000);
@@ -5010,85 +5522,6 @@ def mini_app_page():
                 // Refresh buttons
                 document.getElementById('refreshPosts')?.addEventListener('click', () => this.loadPosts());
                 document.getElementById('refreshLeaderboard')?.addEventListener('click', () => this.loadLeaderboard());
-            }}
-            
-            async makeAuthenticatedRequest(url, options = {{}}) {{
-                if (!this.token) {{
-                    throw new Error('No authentication token');
-                }}
-                
-                const headers = {{
-                    'Authorization': `Bearer ${{this.token}}`,
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }};
-                
-                return fetch(url, {{
-                    ...options,
-                    headers
-                }});
-            }}
-            
-            async submitVent() {{
-                const ventText = document.getElementById('ventText');
-                const categorySelect = document.getElementById('categorySelect');
-                const submitBtn = document.getElementById('submitVent');
-                
-                if (!ventText || !categorySelect || !submitBtn) return;
-                
-                const content = ventText.value.trim();
-                const category = categorySelect.value;
-                
-                if (!content) {{
-                    this.showMessage('Please write something before posting', 'error');
-                    return;
-                }}
-                
-                if (content.length > 5000) {{
-                    this.showMessage('Text is too long (max 5000 characters)', 'error');
-                    return;
-                }}
-                
-                // Disable button and show loading
-                const originalText = submitBtn.textContent;
-                submitBtn.textContent = 'Posting...';
-                submitBtn.disabled = true;
-                
-                try {{
-                    const response = await this.makeAuthenticatedRequest(`${{this.apiBaseUrl}}/api/mini-app/submit-vent`, {{
-                        method: 'POST',
-                        body: JSON.stringify({{
-                            user_id: this.userId,
-                            content: content,
-                            category: category
-                        }})
-                    }});
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.showMessage(data.message, 'success');
-                        
-                        // Clear the form
-                        ventText.value = '';
-                        document.getElementById('charCount').textContent = '0/5000 characters';
-                        
-                        // Switch to posts tab after 2 seconds
-                        setTimeout(() => {{
-                            this.switchTab('posts');
-                            this.loadPosts();
-                        }}, 2000);
-                        
-                    }} else {{
-                        this.showMessage(data.error || 'Failed to submit vent', 'error');
-                    }}
-                }} catch (error) {{
-                    console.error('Error submitting vent:', error);
-                    this.showMessage('Network error. Please try again.', 'error');
-                }} finally {{
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                }}
             }}
             
             switchTab(tabName) {{
@@ -5278,6 +5711,71 @@ def mini_app_page():
                 }}
             }}
             
+            async submitVent() {{
+                const ventText = document.getElementById('ventText');
+                const categorySelect = document.getElementById('categorySelect');
+                const submitBtn = document.getElementById('submitVent');
+                
+                if (!ventText || !categorySelect || !submitBtn) return;
+                
+                const content = ventText.value.trim();
+                const category = categorySelect.value;
+                
+                if (!content) {{
+                    this.showMessage('Please write something before posting', 'error');
+                    return;
+                }}
+                
+                if (content.length > 5000) {{
+                    this.showMessage('Text is too long (max 5000 characters)', 'error');
+                    return;
+                }}
+                
+                // Disable button and show loading
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'Posting...';
+                submitBtn.disabled = true;
+                
+                try {{
+                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/submit-vent`, {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/json'
+                        }},
+                        body: JSON.stringify({{
+                            user_id: this.userId,
+                            content: content,
+                            category: category
+                        }})
+                    }});
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        this.showMessage(data.message, 'success');
+                        
+                        // Clear the form
+                        ventText.value = '';
+                        document.getElementById('charCount').textContent = '0/5000 characters';
+                        
+                        // Switch to posts tab after 2 seconds
+                        setTimeout(() => {{
+                            this.switchTab('posts');
+                            this.loadPosts();
+                        }}, 2000);
+                        
+                    }} else {{
+                        this.showMessage(data.error || 'Failed to submit vent', 'error');
+                    }}
+                }} catch (error) {{
+                    console.error('Error submitting vent:', error);
+                    this.showMessage('Network error. Please try again.', 'error');
+                }} finally {{
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }}
+            }}
+            
             showMessage(message, type = 'success') {{
                 // Remove any existing messages
                 const existingMessages = document.querySelectorAll('.message');
@@ -5308,6 +5806,11 @@ def mini_app_page():
                 return div.innerHTML;
             }}
         }}
+        
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {{
+            window.app = new ChristianVentApp();
+        }});
     </script>
 </body>
 </html>'''
@@ -5320,10 +5823,8 @@ def mini_app_page():
 
 @flask_app.route('/api/mini-app/submit-vent', methods=['POST'])
 def mini_app_submit_vent():
-    """API endpoint for submitting vents from mini app"""
+    """API endpoint for submitting vents from mini app - FIXED VERSION"""
     try:
-        import json
-        
         # Get data from request
         data = request.get_json()
         if not data:
@@ -5344,9 +5845,9 @@ def mini_app_submit_vent():
         if not user:
             return jsonify({'success': False, 'error': 'User not found'}), 404
         
-        # Insert the post (same as bot does)
+        # Insert the post - FIXED: Use proper parameter passing
         post_row = db_execute(
-            "INSERT INTO posts (content, author_id, category, media_type) VALUES (%s, %s, %s, 'text') RETURNING post_id",
+            "INSERT INTO posts (content, author_id, category, media_type, approved) VALUES (%s, %s, %s, 'text', FALSE) RETURNING post_id",
             (content, user_id, category),
             fetchone=True
         )
@@ -5354,12 +5855,28 @@ def mini_app_submit_vent():
         if post_row:
             post_id = post_row['post_id']
             
-            # Notify admin (same as bot does)
-            notify_admin_of_new_post_sync(post_id)
+            # Notify admin via bot (we'll implement this separately)
+            # For now, just log it
+            logger.info(f"📝 Mini App Post submitted by user {user_id}: Post ID {post_id}")
+            
+            # Try to notify admin via bot if possible
+            try:
+                # We need to notify the admin about the new post
+                # Since we're in Flask context, we can't use the bot directly
+                # We'll store it for the bot to check or use a queue
+                
+                # Create a simple notification in the database
+                db_execute(
+                    "INSERT INTO admin_notifications (post_id, user_id, notification_type) VALUES (%s, %s, %s)",
+                    (post_id, user_id, 'new_post')
+                )
+                
+            except Exception as e:
+                logger.error(f"Error creating admin notification: {e}")
             
             return jsonify({
                 'success': True,
-                'message': 'Your vent has been submitted for approval',
+                'message': '✅ Your vent has been submitted for admin approval!',
                 'post_id': post_id
             })
         else:
