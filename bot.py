@@ -1663,16 +1663,43 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.callback_query.message.reply_text("❌ You don't have permission to access this.")
         return
     
-    # Get pending posts (from both bot and mini app)
-    posts = db_fetch_all("""
-        SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id,
-               CASE WHEN pn.id IS NOT NULL THEN TRUE ELSE FALSE END as from_mini_app
-        FROM posts p
-        JOIN users u ON p.author_id = u.user_id
-        LEFT JOIN pending_notifications pn ON p.post_id = pn.post_id
-        WHERE p.approved = FALSE
-        ORDER BY p.timestamp
-    """)
+    try:
+        # Get pending posts (from both bot and mini app)
+        posts = db_fetch_all("""
+            SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id,
+                   CASE WHEN pn.id IS NOT NULL THEN TRUE ELSE FALSE END as from_mini_app
+            FROM posts p
+            JOIN users u ON p.author_id = u.user_id
+            LEFT JOIN pending_notifications pn ON p.post_id = pn.post_id
+            WHERE p.approved = FALSE
+            ORDER BY p.timestamp
+        """)
+    except Exception as e:
+        if "pending_notifications" in str(e):
+            # Table doesn't exist, create it
+            db_execute('''
+                CREATE TABLE IF NOT EXISTS pending_notifications (
+                    id SERIAL PRIMARY KEY,
+                    post_id INTEGER,
+                    user_id TEXT,
+                    content TEXT,
+                    category TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notified BOOLEAN DEFAULT FALSE,
+                    notification_sent_at TIMESTAMP
+                )
+            ''')
+            # Try query again without the LEFT JOIN
+            posts = db_fetch_all("""
+                SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id,
+                       FALSE as from_mini_app
+                FROM posts p
+                JOIN users u ON p.author_id = u.user_id
+                WHERE p.approved = FALSE
+                ORDER BY p.timestamp
+            """)
+        else:
+            raise e
     
     if not posts:
         if update.callback_query:
@@ -1683,7 +1710,7 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Send each pending post to admin
     for post in posts[:10]:  # Limit to 10 posts to avoid flooding
-        source_indicator = "📱" if post['from_mini_app'] else "🤖"
+        source_indicator = "📱" if post.get('from_mini_app') else "🤖"
         
         keyboard = InlineKeyboardMarkup([
             [
@@ -1693,7 +1720,7 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ])
         
         preview = post['content'][:200] + '...' if len(post['content']) > 200 else post['content']
-        text = f"📝 *Pending Post* [{post['category']}]\n\n{preview}\n\n👤 {post['anonymous_name']}"
+        text = f"{source_indicator} *Pending Post* [{post['category']}]\n\n{preview}\n\n👤 {post['anonymous_name']}"
         
         try:
             if post['media_type'] == 'text':
