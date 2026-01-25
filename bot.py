@@ -42,13 +42,29 @@ TOKEN = os.getenv('TOKEN')
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
 BOT_USERNAME = os.getenv('BOT_USERNAME')
 ADMIN_ID = os.getenv('ADMIN_ID')
-
+def create_pending_notifications_table():
+    """Create pending_notifications table if it doesn't exist"""
+    try:
+        db_execute('''
+            CREATE TABLE IF NOT EXISTS pending_notifications (
+                id SERIAL PRIMARY KEY,
+                post_id INTEGER,
+                user_id TEXT,
+                content TEXT,
+                category TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notified BOOLEAN DEFAULT FALSE,
+                notification_sent_at TIMESTAMP
+            )
+        ''')
+        logger.info("✅ pending_notifications table created/verified")
+    except Exception as e:
+        logger.error(f"❌ Error creating pending_notifications table: {e}")
 # Initialize database tables with schema migration
 def init_db():
     try:
         with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as c:
-                
                 # ---------------- Create Tables ----------------
                 c.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -137,42 +153,42 @@ def init_db():
                     PRIMARY KEY (blocker_id, blocked_id)
                 )
                 ''')
-                # Add to database initialization:
+
                 c.execute('''
-                    CREATE TABLE IF NOT EXISTS scheduled_broadcasts (
-                        broadcast_id SERIAL PRIMARY KEY,
-                        scheduled_by TEXT,
-                        content TEXT,
-                        media_type TEXT,
-                        media_id TEXT,
-                        scheduled_time TIMESTAMP,
-                        status TEXT DEFAULT 'scheduled',
-                        target_group TEXT DEFAULT 'all',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
+                CREATE TABLE IF NOT EXISTS scheduled_broadcasts (
+                    broadcast_id SERIAL PRIMARY KEY,
+                    scheduled_by TEXT,
+                    content TEXT,
+                    media_type TEXT,
+                    media_id TEXT,
+                    scheduled_time TIMESTAMP,
+                    status TEXT DEFAULT 'scheduled',
+                    target_group TEXT DEFAULT 'all',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
                 ''')
+
+                # NEW: Add pending_notifications table
                 c.execute('''
-                    CREATE TABLE IF NOT EXISTS admin_notifications (
-                        notification_id SERIAL PRIMARY KEY,
-                        post_id INTEGER REFERENCES posts(post_id),
-                        user_id TEXT,
-                        notification_type TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        processed BOOLEAN DEFAULT FALSE
-                    )
+                CREATE TABLE IF NOT EXISTS pending_notifications (
+                    id SERIAL PRIMARY KEY,
+                    post_id INTEGER,
+                    user_id TEXT,
+                    content TEXT,
+                    category TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notified BOOLEAN DEFAULT FALSE,
+                    notification_sent_at TIMESTAMP
+                )
                 ''')
-                c.execute('''
-                    CREATE TABLE IF NOT EXISTS pending_notifications (
-                        id SERIAL PRIMARY KEY,
-                        post_id INTEGER,
-                        user_id TEXT,
-                        content TEXT,
-                        category TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        notified BOOLEAN DEFAULT FALSE,
-                        notification_sent_at TIMESTAMP
-                    )
-                ''')
+
+                
+                
+                
+                
+        
+    
+        
                 async def schedule_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     """Schedule a broadcast for later"""
                     # Similar to execute_broadcast but stores in database
