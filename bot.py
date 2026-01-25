@@ -42,24 +42,7 @@ TOKEN = os.getenv('TOKEN')
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
 BOT_USERNAME = os.getenv('BOT_USERNAME')
 ADMIN_ID = os.getenv('ADMIN_ID')
-def create_pending_notifications_table():
-    """Create pending_notifications table if it doesn't exist"""
-    try:
-        db_execute('''
-            CREATE TABLE IF NOT EXISTS pending_notifications (
-                id SERIAL PRIMARY KEY,
-                post_id INTEGER,
-                user_id TEXT,
-                content TEXT,
-                category TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                notified BOOLEAN DEFAULT FALSE,
-                notification_sent_at TIMESTAMP
-            )
-        ''')
-        logger.info("✅ pending_notifications table created/verified")
-    except Exception as e:
-        logger.error(f"❌ Error creating pending_notifications table: {e}")
+
 # Initialize database tables with schema migration
 def init_db():
     try:
@@ -168,20 +151,7 @@ def init_db():
                 )
                 ''')
 
-                # NEW: Add pending_notifications table
-                c.execute('''
-                CREATE TABLE IF NOT EXISTS pending_notifications (
-                    id SERIAL PRIMARY KEY,
-                    post_id INTEGER,
-                    user_id TEXT,
-                    content TEXT,
-                    category TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    notified BOOLEAN DEFAULT FALSE,
-                    notification_sent_at TIMESTAMP
-                )
-                ''')
-
+                
                 
                 
                 
@@ -1115,116 +1085,11 @@ async def notify_user_of_private_message(context: ContextTypes.DEFAULT_TYPE, sen
         )
     except Exception as e:
         logger.error(f"Error sending private message notification: {e}")
-async def send_admin_notification(context: ContextTypes.DEFAULT_TYPE, post_id: int):
-    """Send notification to admin about new post"""
-    try:
-        if not ADMIN_ID:
-            return
-        
-        # Get post details from pending_notifications table
-        notification = db_fetch_one(
-            "SELECT * FROM pending_notifications WHERE post_id = %s AND notified = FALSE",
-            (post_id,)
-        )
-        
-        if not notification:
-            # Fallback: get from posts table
-            post = db_fetch_one("SELECT * FROM posts WHERE post_id = %s", (post_id,))
-            if not post:
-                return
-            
-            author = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (post['author_id'],))
-            author_name = get_display_name(author)
-            content_preview = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
-            category = post['category']
-        else:
-            author = db_fetch_one("SELECT * FROM users WHERE user_id = %s", (notification['user_id'],))
-            author_name = get_display_name(author) if author else "Anonymous"
-            content_preview = notification['content'][:100] + '...' if len(notification['content']) > 100 else notification['content']
-            category = notification['category']
-        
-        # Create notification message
-        message = (
-            f"🆕 *New Post from Mini App*\n\n"
-            f"👤 *From:* {escape_markdown(author_name, version=2)}\n"
-            f"📌 *Category:* {category}\n\n"
-            f"📝 *Content:*\n{escape_markdown(content_preview, version=2)}\n\n"
-            f"🆔 Post ID: {post_id}"
-        )
-        
-        # Create inline keyboard with approve/reject buttons
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ Approve", callback_data=f"approve_post_{post_id}"),
-                InlineKeyboardButton("❌ Reject", callback_data=f"reject_post_{post_id}")
-            ],
-            [
-                InlineKeyboardButton("📋 View All Pending", callback_data='admin_pending')
-            ]
-        ])
-        
-        # Send notification to admin
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=message,
-            reply_markup=keyboard,
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
-        
-        # Mark as notified
-        db_execute(
-            "UPDATE pending_notifications SET notified = TRUE, notification_sent_at = CURRENT_TIMESTAMP WHERE post_id = %s",
-            (post_id,)
-        )
-        
-        logger.info(f"✅ Admin notification sent for post {post_id}")
-        
-    except Exception as e:
-        logger.error(f"❌ Error sending admin notification: {e}")
 
-async def check_pending_notifications(context: ContextTypes.DEFAULT_TYPE):
-    """Check for pending notifications and send them to admin"""
-    try:
-        # Get pending notifications that haven't been sent
-        pending = db_fetch_all(
-            "SELECT * FROM pending_notifications WHERE notified = FALSE ORDER BY created_at"
-        )
-        
-        for notification in pending[:5]:  # Process up to 5 at a time
-            post_id = notification['post_id']
-            
-            # Send notification
-            await send_admin_notification(context, post_id)
-            
-            # Small delay between notifications
-            await asyncio.sleep(1)
-            
-    except Exception as e:
-        logger.error(f"Error checking pending notifications: {e}")
 
-async def check_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Manually check for pending notifications"""
-    user_id = str(update.effective_user.id)
-    
-    # Verify admin permissions
-    user = db_fetch_one("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
-    if not user or not user['is_admin']:
-        await update.message.reply_text("❌ You don't have permission to access this.")
-        return
-    
-    # Check for pending notifications
-    pending_count = db_fetch_one(
-        "SELECT COUNT(*) as count FROM pending_notifications WHERE notified = FALSE"
-    )
-    
-    if pending_count and pending_count['count'] > 0:
-        await update.message.reply_text(
-            f"🔔 Found {pending_count['count']} pending notification(s). Sending now..."
-        )
-        await check_pending_notifications(context)
-        await update.message.reply_text("✅ Notifications sent!")
-    else:
-        await update.message.reply_text("✅ No pending notifications.")
+
+
+
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     user = db_fetch_one("SELECT is_admin FROM users WHERE user_id = %s", (user_id,))
@@ -1679,43 +1544,14 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.callback_query.message.reply_text("❌ You don't have permission to access this.")
         return
     
-    try:
-        # Get pending posts (from both bot and mini app)
-        posts = db_fetch_all("""
-            SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id,
-                   CASE WHEN pn.id IS NOT NULL THEN TRUE ELSE FALSE END as from_mini_app
-            FROM posts p
-            JOIN users u ON p.author_id = u.user_id
-            LEFT JOIN pending_notifications pn ON p.post_id = pn.post_id
-            WHERE p.approved = FALSE
-            ORDER BY p.timestamp
-        """)
-    except Exception as e:
-        if "pending_notifications" in str(e):
-            # Table doesn't exist, create it
-            db_execute('''
-                CREATE TABLE IF NOT EXISTS pending_notifications (
-                    id SERIAL PRIMARY KEY,
-                    post_id INTEGER,
-                    user_id TEXT,
-                    content TEXT,
-                    category TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    notified BOOLEAN DEFAULT FALSE,
-                    notification_sent_at TIMESTAMP
-                )
-            ''')
-            # Try query again without the LEFT JOIN
-            posts = db_fetch_all("""
-                SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id,
-                       FALSE as from_mini_app
-                FROM posts p
-                JOIN users u ON p.author_id = u.user_id
-                WHERE p.approved = FALSE
-                ORDER BY p.timestamp
-            """)
-        else:
-            raise e
+    # Get pending posts (simplified - no JOIN with pending_notifications)
+    posts = db_fetch_all("""
+        SELECT p.post_id, p.content, p.category, u.anonymous_name, p.media_type, p.media_id
+        FROM posts p
+        JOIN users u ON p.author_id = u.user_id
+        WHERE p.approved = FALSE
+        ORDER BY p.timestamp
+    """)
     
     if not posts:
         if update.callback_query:
@@ -1726,8 +1562,6 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Send each pending post to admin
     for post in posts[:10]:  # Limit to 10 posts to avoid flooding
-        source_indicator = "📱" if post.get('from_mini_app') else "🤖"
-        
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("✅ Approve", callback_data=f"approve_post_{post['post_id']}"),
@@ -1736,7 +1570,7 @@ async def show_pending_posts(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ])
         
         preview = post['content'][:200] + '...' if len(post['content']) > 200 else post['content']
-        text = f"{source_indicator} *Pending Post* [{post['category']}]\n\n{preview}\n\n👤 {post['anonymous_name']}"
+        text = f"📝 *Pending Post* [{post['category']}]\n\n{preview}\n\n👤 {post['anonymous_name']}"
         
         try:
             if post['media_type'] == 'text':
@@ -4932,18 +4766,13 @@ def main():
     app.add_handler(CommandHandler("settings", show_settings))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("inbox", show_inbox))
-    app.add_handler(CommandHandler("checknotifications", check_notifications))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_private_message_text))
     
     app.add_error_handler(error_handler)
     
-    # Schedule the notification checker to run every 30 seconds
-    job_queue = app.job_queue
-    if job_queue:
-        job_queue.run_repeating(check_pending_notifications, interval=30, first=10)
-        logger.info("✅ Notification checker scheduled")
+    
     
     # Start Flask server in a separate thread for Render
     port = int(os.environ.get('PORT', 5000))
@@ -5988,7 +5817,7 @@ def mini_app_page():
 
 @flask_app.route('/api/mini-app/submit-vent', methods=['POST'])
 def mini_app_submit_vent():
-    """API endpoint for submitting vents from mini app - UPDATED"""
+    """API endpoint for submitting vents from mini app - SIMPLIFIED"""
     try:
         # Get data from request
         data = request.get_json()
@@ -6010,7 +5839,7 @@ def mini_app_submit_vent():
         if not user:
             return jsonify({'success': False, 'error': 'User not found'}), 404
         
-        # Insert the post
+        # Insert the post (simple and clean)
         post_row = db_execute(
             "INSERT INTO posts (content, author_id, category, media_type, approved) VALUES (%s, %s, %s, 'text', FALSE) RETURNING post_id",
             (content, user_id, category),
@@ -6020,16 +5849,8 @@ def mini_app_submit_vent():
         if post_row:
             post_id = post_row['post_id']
             
-            # Save to pending_notifications table
-            db_execute(
-                "INSERT INTO pending_notifications (post_id, user_id, content, category) VALUES (%s, %s, %s, %s)",
-                (post_id, user_id, content, category)
-            )
-            
-            logger.info(f"📝 Mini App Post submitted by user {user_id}: Post ID {post_id}")
-            
-            # Send notification (we'll trigger this from the bot side)
-            # The bot will check for pending notifications periodically
+            # Log it (optional)
+            logger.info(f"📝 Mini App Post submitted: ID {post_id} by {user_id}")
             
             return jsonify({
                 'success': True,
