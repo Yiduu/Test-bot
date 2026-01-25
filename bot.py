@@ -425,11 +425,16 @@ def login_page():
         }
         
         .logo {
-            color: #BF970B;
-            font-size: 2.5rem;
-            margin-bottom: 20px;
+            width: 90px;
+            height: auto;
+            margin-bottom: 15px;
         }
-        
+        .title {
+            color: #BF970B;
+            font-size: 2.6rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+        }
         h1 {
             color: #BF970B;
             margin-bottom: 10px;
@@ -494,8 +499,11 @@ def login_page():
 </head>
 <body>
     <div class="login-container">
-        <div class="logo">✝️</div>
-        <h1>Christian Vent</h1>
+        <div class="brand">
+            <img src="/static/images/vent logo.png" class="logo" alt="Christian Vent Logo">
+            <h1 class="title">CHRISTIAN VENT</h1>
+        </div>
+
         <p>Share your thoughts anonymously with the Christian community</p>
         
         <p>To use the mini app, you need to authenticate with the Telegram bot:</p>
