@@ -402,6 +402,7 @@ def login_page():
 <head>
     <title>Christian Vent - Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -432,9 +433,12 @@ def login_page():
         }
         .title {
             color: #BF970B;
-            font-size: 2.6rem;
-            font-weight: 900;
+            font-size: 2.8rem;
+            font-weight: 700;
             letter-spacing: 3px;
+            font-family: 'Oswald', sans-serif;
+            text-transform: uppercase;
+            margin: 0;
         }
         h1 {
             color: #BF970B;
@@ -4936,6 +4940,7 @@ def mini_app_page():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{app_name} - Mini App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {{
@@ -4950,6 +4955,11 @@ def mini_app_page():
             color: #E0E0E0;
             min-height: 100vh;
             padding: 0;
+        }}
+        
+        h1, h2, h3, h4, h5, h6 {{
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
         }}
         
         .app-container {{
@@ -4987,16 +4997,19 @@ def mini_app_page():
         
         .app-title {{
             color: #BF970B;
-            font-size: 2rem;
+            font-size: 2.2rem;
             margin: 0;
-            font-weight: 300;
+            font-weight: 700;
             letter-spacing: 1px;
+            font-family: 'Oswald', sans-serif;
+            text-transform: uppercase;
         }}
         
         .app-subtitle {{
             opacity: 0.8;
             margin-top: 8px;
             font-size: 0.95rem;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }}
         
         /* Tabs */
@@ -5064,7 +5077,10 @@ def mini_app_page():
         .form-title {{
             color: #BF970B;
             margin-bottom: 10px;
-            font-weight: 400;
+            font-weight: 600;
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.4rem;
+            text-transform: uppercase;
         }}
         
         .form-description {{
@@ -5173,8 +5189,11 @@ def mini_app_page():
         
         .section-title {{
             color: #BF970B;
-            font-weight: 400;
+            font-weight: 600;
             margin: 0;
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            text-transform: uppercase;
         }}
         
         .refresh-btn {{
@@ -5233,6 +5252,7 @@ def mini_app_page():
             font-size: 1rem;
             font-weight: 500;
             margin: 0 0 5px 0;
+            font-family: 'Oswald', sans-serif;
         }}
         
         .post-meta {{
@@ -5327,6 +5347,7 @@ def mini_app_page():
             font-size: 1rem;
             font-weight: 500;
             margin: 0 0 4px 0;
+            font-family: 'Oswald', sans-serif;
         }}
         
         .user-info-small p {{
@@ -5370,6 +5391,8 @@ def mini_app_page():
         .profile-header h2 {{
             font-size: 1.8rem;
             margin: 0 0 10px 0;
+            font-family: 'Oswald', sans-serif;
+            font-weight: 600;
         }}
         
         .profile-rating {{
@@ -5473,7 +5496,7 @@ def mini_app_page():
                 <header class="app-header">
                     <div class="brand">
                         <img src="/static/images/vent%20logo.jpg" class="logo" alt="Christian Vent Logo">
-                        <h1 class="app-title">✝️ {app_name}</h1>
+                        <h1 class="app-title"> {app_name}</h1>
                     </div>
                     <p class="app-subtitle">A safe space for Christian anonymous venting</p>
             <div id="userInfo" class="user-info" style="margin-top: 15px; display: none;">
