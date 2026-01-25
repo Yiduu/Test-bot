@@ -359,8 +359,9 @@ def build_category_buttons():
         buttons.append(row)
     return InlineKeyboardMarkup(buttons) 
 
+
 # Initialize Flask app for Render health checks
-flask_app = Flask(__name__) 
+flask_app = Flask(__name__, static_folder='static')
 
 # ==================== FLASK ROUTES ====================
 
@@ -500,7 +501,7 @@ def login_page():
 <body>
     <div class="login-container">
         <div class="brand">
-            <img src="/static/images/vent logo.jpg" class="logo" alt="Christian Vent Logo">
+            <img src="/static/images/vent%20logo.jpg" class="logo" alt="Christian Vent Logo">
             <h1 class="title">CHRISTIAN VENT</h1>
         </div>
 
@@ -613,6 +614,15 @@ def favicon():
 @flask_app.route('/ping')
 def uptimerobot_ping():
     return jsonify(status="OK", message="Pong! Bot is alive")
+
+# Serve static files
+@flask_app.route('/static/<path:filename>')
+def static_files(filename):
+    """Serve static files"""
+    try:
+        return send_from_directory('static', filename)
+    except Exception as e:
+        return f"Error loading file: {e}", 404
 
 # Create main menu keyboard with improved buttons
 main_menu = ReplyKeyboardMarkup(
@@ -4950,11 +4960,29 @@ def mini_app_page():
         }}
         
         /* Header */
+                /* Header */
         .app-header {{
             text-align: center;
             padding: 20px 0;
             margin-bottom: 20px;
             border-bottom: 1px solid #3A4A50;
+        }}
+        
+        .app-header .brand {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .app-header .logo {{
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            border-radius: 50%;
+            border: 2px solid #BF970B;
+            background: #2E3A40;
+            padding: 5px;
         }}
         
         .app-title {{
@@ -5441,9 +5469,13 @@ def mini_app_page():
 <body>
     <div class="app-container" id="appContainer">
         <!-- Header -->
-        <header class="app-header">
-            <h1 class="app-title">✝️ {app_name}</h1>
-            <p class="app-subtitle">A safe space for Christian anonymous venting</p>
+                <!-- Header -->
+                <header class="app-header">
+                    <div class="brand">
+                        <img src="/static/images/vent%20logo.jpg" class="logo" alt="Christian Vent Logo">
+                        <h1 class="app-title">✝️ {app_name}</h1>
+                    </div>
+                    <p class="app-subtitle">A safe space for Christian anonymous venting</p>
             <div id="userInfo" class="user-info" style="margin-top: 15px; display: none;">
                 <!-- User info will be loaded here -->
             </div>
