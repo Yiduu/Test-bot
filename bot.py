@@ -500,7 +500,7 @@ def login_page():
 <body>
     <div class="login-container">
         <div class="brand">
-            <img src="/static/images/vent logo.png" class="logo" alt="Christian Vent Logo">
+            <img src="/static/images/vent logo.jpg" class="logo" alt="Christian Vent Logo">
             <h1 class="title">CHRISTIAN VENT</h1>
         </div>
 
