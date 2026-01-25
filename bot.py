@@ -345,21 +345,219 @@ flask_app = Flask(__name__)
 # ==================== FLASK ROUTES ====================
 
 # Root shows mini app
+# Root shows mini app with token check
 @flask_app.route('/')
 def main_page():
-    return mini_app_page()
+    """Show mini app with authentication check"""
+    # Check if there's a token in the URL
+    token = request.args.get('token')
+    
+    if not token:
+        # No token - redirect to login page
+        return redirect('/login')
+    
+    # Verify the token
+    try:
+        response = requests.get(f'{request.host_url}api/verify-token/{token}')
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                # Token is valid, show mini app with user info
+                return mini_app_page()
+    except Exception as e:
+        logger.error(f"Error verifying token: {e}")
+    
+    # Invalid token or error - redirect to login
+    return redirect('/login')
 
-# Handle favicon request
-@flask_app.route('/favicon.ico')
-def favicon():
-    return '', 404  # Return empty 404 for favicon
+# Login page for mini app
+@flask_app.route('/login')
+def login_page():
+    """Show login page for mini app"""
+    bot_username = BOT_USERNAME
+    
+    html = '''<!DOCTYPE html>
+<html>
+<head>
+    <title>Christian Vent - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #272F32;
+            color: #E0E0E0;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .login-container {
+            background: #2E3A40;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #3A4A50;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .logo {
+            color: #BF970B;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #BF970B;
+            margin-bottom: 10px;
+        }
+        
+        p {
+            opacity: 0.8;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .telegram-btn {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 20px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .telegram-btn:hover {
+            background: #0077b3;
+        }
+        
+        .bot-link {
+            color: #BF970B;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .bot-link:hover {
+            text-decoration: underline;
+        }
+        
+        .features {
+            text-align: left;
+            margin-top: 30px;
+            background: rgba(191, 151, 11, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .features h3 {
+            color: #BF970B;
+            margin-top: 0;
+        }
+        
+        .features ul {
+            padding-left: 20px;
+        }
+        
+        .features li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">✝️</div>
+        <h1>Christian Vent</h1>
+        <p>Share your thoughts anonymously with the Christian community</p>
+        
+        <p>To use the mini app, you need to authenticate with the Telegram bot:</p>
+        
+        <a href="https://t.me/''' + bot_username + '''" class="telegram-btn" target="_blank">
+            Open Telegram Bot
+        </a>
+        
+        <p>Or use this link: <a href="https://t.me/''' + bot_username + '''" class="bot-link" target="_blank">@''' + bot_username + '''</a></p>
+        
+        <div class="features">
+            <h3>Features:</h3>
+            <ul>
+                <li>Share anonymous vents and prayers</li>
+                <li>Join Christian community discussions</li>
+                <li>View and comment on posts</li>
+                <li>Check leaderboard of top contributors</li>
+                <li>Manage your profile and settings</li>
+            </ul>
+        </div>
+        
+        <p style="margin-top: 30px; font-size: 0.9rem; opacity: 0.7;">
+            After opening the bot, use the /webapp command to get authenticated access to the mini app.
+        </p>
+    </div>
+</body>
+</html>'''
+    
+    return html
+
+# Generate token for mini app (called by bot)
+@flask_app.route('/api/generate-token/<user_id>')
+def generate_token(user_id):
+    """Generate a token for mini app authentication"""
+    try:
+        # Create JWT token that expires in 30 days
+        token = jwt.encode(
+            {
+                'user_id': user_id,
+                'exp': datetime.now(timezone.utc) + timedelta(days=30)
+            },
+            TOKEN,  # Use your bot token as secret key
+            algorithm='HS256'
+        )
+        
+        return jsonify({
+            'success': True,
+            'token': token
+        })
+    except Exception as e:
+        logger.error(f"Error generating token: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Verify token
+@flask_app.route('/api/verify-token/<token>')
+def verify_token(token):
+    """Verify JWT token"""
+    try:
+        decoded = jwt.decode(token, TOKEN, algorithms=['HS256'])
+        return jsonify({
+            'success': True,
+            'user_id': decoded['user_id']
+        })
+    except jwt.ExpiredSignatureError:
+        return jsonify({'success': False, 'error': 'Token expired'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'success': False, 'error': 'Invalid token'}), 401
+    except Exception as e:
+        logger.error(f"Error verifying token: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Health check for Render
 @flask_app.route('/health')
 def health_check():
     return jsonify(status="OK", message="Christian Chat Bot is running")
 
-# Keep uptimerobot ping
+# Handle favicon request
+@flask_app.route('/favicon.ico')
+def favicon():
+    return '', 404  # Return empty 404 for favicon
+
+# UptimeRobot ping
 @flask_app.route('/ping')
 def uptimerobot_ping():
     return jsonify(status="OK", message="Pong! Bot is alive")
@@ -4471,18 +4669,22 @@ async def set_bot_commands(app):
     await app.bot.set_my_commands(commands)
 
 async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send the mini app link to user"""
+    """Send the mini app link with authentication token"""
     user_id = str(update.effective_user.id)
     
-    # Use YOUR ACTUAL RENDER URL (the one for your bot service)
-    # Get it from environment or hardcode it
-    render_url = os.getenv('RENDER_URL')
+    # Generate a secure JWT token
+    token = jwt.encode(
+        {
+            'user_id': user_id,
+            'exp': datetime.now(timezone.utc) + timedelta(days=30)
+        },
+        TOKEN,
+        algorithm='HS256'
+    )
     
-    # Generate a simple token
-    token = f"user_{user_id}_{int(time.time())}"
-    
-    # Create the mini app URL (pointing to YOUR bot service)
-    mini_app_url = f"{render_url}?token={token}"
+    # Create the mini app URL with token
+    render_url = os.getenv('RENDER_URL', 'https://your-render-url.onrender.com')
+    mini_app_url = f"{render_url}/?token={token}"
     
     # Create WebApp button
     web_app_info = WebAppInfo(url=mini_app_url)
@@ -4491,18 +4693,21 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Open Web App", web_app=web_app_info)],
         [InlineKeyboardButton("📱 Open in Browser", url=mini_app_url)],
+        [InlineKeyboardButton("🔄 Refresh Token", callback_data='refresh_mini_app')],
         [InlineKeyboardButton("🤖 Back to Bot", callback_data='menu')]
     ])
     
     await update.message.reply_text(
         "🌐 *Christian Vent Web App*\n\n"
         "Click the button below to open our web interface.\n\n"
-        "You can:\n"
+        "📋 *Features:*\n"
         "• Share anonymous vents\n"
         "• View community posts\n"
         "• See the leaderboard\n"
         "• Manage your profile\n\n"
-        "_Note: Some features require the Telegram bot for full functionality._",
+        "🔒 *Secure Access:*\n"
+        "Your token is valid for 30 days.\n\n"
+        "_Note: Always use this link from the bot to stay authenticated._",
         reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN
     )
@@ -5195,593 +5400,224 @@ def mini_app_page():
     </div>
     
     <script>
-        // Christian Vent Mini App - Main JavaScript
-        class ChristianVentApp {{
-            constructor() {{
-                this.user = null;
-                this.token = null;
-                this.botUsername = "{bot_username}";
-                this.apiBaseUrl = window.location.origin; // Same domain as the mini app
-                this.isAdmin = false;
-                this.init();
-            }}
-            
-            async init() {{
-                this.setupEventListeners();
-                await this.loadUserData();
-                this.checkTelegramWebApp();
-                
-                // Check for token in URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const urlToken = urlParams.get('token');
-                if (urlToken) {{
-                    this.token = urlToken;
-                    localStorage.setItem('cv_token', urlToken);
-                    await this.verifyToken();
-                }} else {{
-                    // Check localStorage
-                    const storedToken = localStorage.getItem('cv_token');
-                    if (storedToken) {{
-                        this.token = storedToken;
-                        await this.verifyToken();
-                    }}
-                }}
-                
-                // Load initial data
-                await this.loadPosts();
-                await this.loadLeaderboard();
-            }}
-            
-            async verifyToken() {{
-                if (!this.token) return;
-                
-                try {{
-                    // Extract user_id from token (format: user_{{user_id}}_{{timestamp}})
-                    const parts = this.token.split('_');
-                    if (parts.length >= 2) {{
-                        const user_id = parts[1];
-                        await this.loadProfile(user_id);
-                    }}
-                }} catch (error) {{
-                    console.error('Error verifying token:', error);
-                }}
-            }}
-            
-            checkTelegramWebApp() {{
-                if (window.Telegram && Telegram.WebApp) {{
-                    Telegram.WebApp.ready();
-                    Telegram.WebApp.expand();
-                    console.log("Running in Telegram WebApp");
-                    
-                    // Get user data from Telegram
-                    const tgUser = Telegram.WebApp.initDataUnsafe.user;
-                    if (tgUser) {{
-                        this.user = {{
-                            id: tgUser.id,
-                            name: tgUser.first_name || 'Anonymous',
-                            username: tgUser.username
-                        }};
-                        this.updateUserInfo();
-                    }}
-                }}
-            }}
-            
-            setupEventListeners() {{
-                // Tab switching
-                document.querySelectorAll('.tab-btn').forEach(btn => {{
-                    btn.addEventListener('click', (e) => {{
-                        const tab = e.target.dataset.tab;
-                        this.switchTab(tab);
-                    }});
-                }});
-                
-                // Character counter
-                const ventText = document.getElementById('ventText');
-                const charCount = document.getElementById('charCount');
-                if (ventText && charCount) {{
-                    ventText.addEventListener('input', () => {{
-                        charCount.textContent = `${{ventText.value.length}}/5000 characters`;
-                    }});
-                }}
-                
-                // Submit vent
-                const submitBtn = document.getElementById('submitVent');
-                if (submitBtn) {{
-                    submitBtn.addEventListener('click', () => this.submitVent());
-                }}
-                
-                // Refresh buttons
-                document.getElementById('refreshPosts')?.addEventListener('click', () => this.loadPosts());
-                document.getElementById('refreshLeaderboard')?.addEventListener('click', () => this.loadLeaderboard());
-                
-                // Admin button (if admin)
-                const adminBtn = document.getElementById('adminTab');
-                if (adminBtn) {{
-                    adminBtn.addEventListener('click', () => this.loadAdminPanel());
-                }}
-            }}
-            
-            switchTab(tabName) {{
-                // Update active tab button
-                document.querySelectorAll('.tab-btn').forEach(btn => {{
-                    btn.classList.toggle('active', btn.dataset.tab === tabName);
-                }});
-                
-                // Update active tab pane
-                document.querySelectorAll('.tab-pane').forEach(pane => {{
-                    pane.classList.toggle('active', pane.id === `${{tabName}}-tab`);
-                }});
-                
-                // Load data for the tab if needed
-                if (tabName === 'profile' && this.user) {{
-                    this.loadProfile(this.user.id);
-                }} else if (tabName === 'admin' && this.isAdmin) {{
-                    this.loadAdminPanel();
-                }}
-            }}
-            
-            updateUserInfo() {{
-                const userInfoEl = document.getElementById('userInfo');
-                if (userInfoEl && this.user) {{
-                    userInfoEl.innerHTML = `
-                        <div style="background: rgba(191, 151, 11, 0.1); padding: 10px 15px; border-radius: 8px; display: inline-block;">
-                            👋 Welcome, ${{this.user.name}}!
-                        </div>
-                    `;
-                    userInfoEl.style.display = 'block';
-                }}
-            }}
-            
-            async loadPosts() {{
-                const container = document.getElementById('postsContainer');
-                if (!container) return;
-                
-                container.innerHTML = '<div class="loading">Loading community posts...</div>';
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/get-posts?page=1&per_page=10`);
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.renderPosts(data.data);
-                    }} else {{
-                        container.innerHTML = `
-                            <div class="error-message">
-                                Failed to load posts: ${{data.error || 'Unknown error'}}
-                            </div>
-                        `;
-                    }}
-                }} catch (error) {{
-                    console.error('Error loading posts:', error);
-                    container.innerHTML = `
-                        <div class="error-message">
-                            Network error. Please check your connection.
-                        </div>
-                    `;
-                }}
-            }}
-            
-            renderPosts(posts) {{
-                const container = document.getElementById('postsContainer');
-                if (!container) return;
-                
-                if (!posts || posts.length === 0) {{
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <h3 style="color: #BF970B;">No posts yet</h3>
-                            <p style="opacity: 0.8; margin-bottom: 20px;">Be the first to share what's on your heart</p>
-                            <button onclick="app.switchTab('vent')" 
-                                    style="background: #BF970B; color: #272F32; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                                Share Your First Vent
-                            </button>
-                        </div>
-                    `;
-                    return;
-                }}
-                
-                container.innerHTML = posts.map(post => `
-                    <div class="post-card">
-                        <div class="post-header">
-                            <div class="author-avatar">
-                                ${{post.author.sex || '👤'}}
-                            </div>
-                            <div class="author-info">
-                                <h4>${{post.author.name}}</h4>
-                                <div class="post-meta">
-                                    <span class="post-category">${{post.category}}</span>
-                                    <span>•</span>
-                                    <span>${{post.time_ago}}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="post-content">
-                            ${{this.escapeHtml(post.content)}}
-                        </div>
-                        
-                        <div class="post-footer">
-                            <div class="comment-count">
-                                💬 ${{post.comments}} comment${{post.comments !== 1 ? 's' : ''}}
-                            </div>
-                            <button onclick="window.open('https://t.me/${{this.botUsername}}?start=comments_${{post.id}}', '_blank')" 
-                                    style="background: transparent; color: #BF970B; border: 1px solid #BF970B; padding: 5px 15px; border-radius: 5px; font-size: 0.9rem; cursor: pointer;">
-                                View in Bot
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-            }}
-            
-            async loadLeaderboard() {{
-                const container = document.getElementById('leaderboardContainer');
-                if (!container) return;
-                
-                container.innerHTML = '<div class="loading">Loading leaderboard...</div>';
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/leaderboard`);
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.renderLeaderboard(data.data);
-                    }} else {{
-                        container.innerHTML = '<div class="error-message">Failed to load leaderboard</div>';
-                    }}
-                }} catch (error) {{
-                    console.error('Error loading leaderboard:', error);
-                    container.innerHTML = '<div class="error-message">Network error</div>';
-                }}
-            }}
-            
-            renderLeaderboard(users) {{
-                const container = document.getElementById('leaderboardContainer');
-                if (!container) return;
-                
-                container.innerHTML = `
-                    <div style="padding: 20px;">
-                        <div style="text-align: center; margin-bottom: 20px;">
-                            <h3 style="color: #BF970B;">Top Contributors</h3>
-                            <p style="opacity: 0.8;">Based on community contributions</p>
-                        </div>
-                        
-                        ${{users.map((user, index) => `
-                            <div class="leaderboard-item">
-                                <div class="leaderboard-rank rank-${{index + 1}}">${{index + 1}}</div>
-                                <div class="leaderboard-user">
-                                    <div class="user-avatar-small">${{user.sex || '👤'}}</div>
-                                    <div class="user-info-small">
-                                        <h4>${{user.name}}</h4>
-                                        <p>${{user.aura}} Contributor</p>
-                                    </div>
-                                </div>
-                                <div class="leaderboard-points">${{user.points}} pts</div>
-                            </div>
-                        `).join('')}}
-                        
-                        <div style="text-align: center; margin-top: 25px; padding-top: 20px; border-top: 1px solid #3A4A50;">
-                            <button onclick="window.open('https://t.me/${{this.botUsername}}?start=leaderboard', '_blank')" 
-                                    style="background: #BF970B; color: #272F32; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                                View Full Leaderboard in Bot
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }}
-            
-            async submitVent() {{
-                const ventText = document.getElementById('ventText');
-                const categorySelect = document.getElementById('categorySelect');
-                const submitBtn = document.getElementById('submitVent');
-                
-                if (!ventText || !categorySelect || !submitBtn) return;
-                
-                const content = ventText.value.trim();
-                const category = categorySelect.value;
-                
-                if (!content) {{
-                    this.showMessage('Please write something before posting', 'error');
-                    return;
-                }}
-                
-                if (content.length > 5000) {{
-                    this.showMessage('Text is too long (max 5000 characters)', 'error');
-                    return;
-                }}
-                
-                // Get user ID from token
-                let user_id = null;
-                if (this.token) {{
-                    const parts = this.token.split('_');
-                    if (parts.length >= 2) {{
-                        user_id = parts[1];
-                    }}
-                }}
-                
-                if (!user_id) {{
-                    this.showMessage('Please log in first (use the Telegram bot)', 'error');
-                    return;
-                }}
-                
-                // Disable button and show loading
-                const originalText = submitBtn.textContent;
-                submitBtn.textContent = 'Posting...';
-                submitBtn.disabled = true;
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/submit-vent`, {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json'
-                        }},
-                        body: JSON.stringify({{
-                            user_id: user_id,
-                            content: content,
-                            category: category
-                        }})
-                    }});
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.showMessage(data.message, 'success');
-                        
-                        // Clear the form
-                        ventText.value = '';
-                        document.getElementById('charCount').textContent = '0/5000 characters';
-                        
-                        // Switch to posts tab after 2 seconds
-                        setTimeout(() => {{
-                            this.switchTab('posts');
-                            this.loadPosts();
-                        }}, 2000);
-                        
-                    }} else {{
-                        this.showMessage(data.error || 'Failed to submit vent', 'error');
-                    }}
-                }} catch (error) {{
-                    console.error('Error submitting vent:', error);
-                    this.showMessage('Network error. Please try again.', 'error');
-                }} finally {{
-                    submitBtn.textContent = originalText;
-                    submitBtn.disabled = false;
-                }}
-            }}
-            
-            async loadProfile(user_id) {{
-                const container = document.getElementById('profileContainer');
-                if (!container) return;
-                
-                container.innerHTML = '<div class="loading">Loading profile...</div>';
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/profile/${{user_id}}`);
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        const profile = data.data;
-                        this.renderProfile(profile);
-                    }} else {{
-                        container.innerHTML = `
-                            <div class="error-message">
-                                Failed to load profile. Please log in through the Telegram bot.
-                            </div>
-                        `;
-                    }}
-                }} catch (error) {{
-                    console.error('Error loading profile:', error);
-                    container.innerHTML = '<div class="error-message">Network error</div>';
-                }}
-            }}
-            
-            renderProfile(profile) {{
-                const container = document.getElementById('profileContainer');
-                if (!container) return;
-                
-                container.innerHTML = `
-                    <div class="profile-header">
-                        <div class="profile-avatar">
-                            ${{profile.sex || '👤'}}
-                        </div>
-                        <h2>${{profile.name}}</h2>
-                        <div class="profile-rating">
-                            ${{profile.aura}} ${{profile.rating}} points
-                        </div>
-                    </div>
-                    
-                    <div style="background: rgba(191, 151, 11, 0.1); padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h4 style="color: #BF970B; margin-bottom: 10px;">Your Statistics</h4>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
-                            <div>
-                                <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">${{profile.stats.posts}}</div>
-                                <div style="font-size: 0.9rem; opacity: 0.8;">Vents</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">${{profile.stats.comments}}</div>
-                                <div style="font-size: 0.9rem; opacity: 0.8;">Comments</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">${{profile.stats.followers}}</div>
-                                <div style="font-size: 0.9rem; opacity: 0.8;">Followers</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 25px;">
-                        <button onclick="window.open('https://t.me/${{this.botUsername}}', '_blank')" 
-                                style="background: #BF970B; color: #272F32; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%;">
-                            Open Full Profile in Bot
-                        </button>
-                    </div>
-                `;
-            }}
-            
-            // Admin functions
-            async loadAdminPanel() {{
-                if (!this.isAdmin) {{
-                    this.showMessage('Admin access required', 'error');
-                    return;
-                }}
-                
-                const container = document.getElementById('adminContainer');
-                if (!container) return;
-                
-                container.innerHTML = '<div class="loading">Loading admin panel...</div>';
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/admin/pending-posts`);
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.renderAdminPanel(data.data);
-                    }}
-                }} catch (error) {{
-                    console.error('Error loading admin panel:', error);
-                }}
-            }}
-            
-            renderAdminPanel(posts) {{
-                const container = document.getElementById('adminContainer');
-                if (!container) return;
-                
-                if (!posts || posts.length === 0) {{
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 40px;">
-                            <h3 style="color: #BF970B;">No pending posts</h3>
-                            <p>All posts have been reviewed.</p>
-                        </div>
-                    `;
-                    return;
-                }}
-                
-                container.innerHTML = `
-                    <div style="margin-bottom: 20px;">
-                        <h3 style="color: #BF970B;">Pending Posts (${{posts.length}})</h3>
-                        <p style="opacity: 0.8;">Review and approve or reject posts</p>
-                    </div>
-                    
-                    ${{posts.map(post => `
-                        <div class="post-card" style="margin-bottom: 15px;">
-                            <div class="post-header">
-                                <div class="author-avatar">
-                                    ${{post.author_sex || '👤'}}
-                                </div>
-                                <div class="author-info">
-                                    <h4>${{post.author_name}}</h4>
-                                    <div class="post-meta">
-                                        <span class="post-category">${{post.category}}</span>
-                                        <span>•</span>
-                                        <span>${{new Date(post.timestamp).toLocaleDateString()}}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="post-content">
-                                ${{this.escapeHtml(post.content.length > 500 ? post.content.substring(0, 500) + '...' : post.content)}}
-                            </div>
-                            
-                            <div class="post-footer" style="justify-content: flex-end; gap: 10px;">
-                                <button onclick="app.approvePost(${{post.post_id}})" 
-                                        style="background: #51cf66; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
-                                    ✅ Approve
-                                </button>
-                                <button onclick="app.rejectPost(${{post.post_id}})" 
-                                        style="background: #ff6b6b; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">
-                                    ❌ Reject
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}}
-                `;
-            }}
-            
-            async approvePost(post_id) {{
-                if (!confirm('Approve this post?')) return;
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/admin/approve-post`, {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json'
-                        }},
-                        body: JSON.stringify({{ post_id: post_id }})
-                    }});
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.showMessage('Post approved successfully', 'success');
-                        this.loadAdminPanel();
-                    }} else {{
-                        this.showMessage(data.error || 'Failed to approve post', 'error');
-                    }}
-                }} catch (error) {{
-                    console.error('Error approving post:', error);
-                    this.showMessage('Network error', 'error');
-                }}
-            }}
-            
-            async rejectPost(post_id) {{
-                if (!confirm('Reject and delete this post?')) return;
-                
-                try {{
-                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/admin/reject-post`, {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json'
-                        }},
-                        body: JSON.stringify({{ post_id: post_id }})
-                    }});
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {{
-                        this.showMessage('Post rejected successfully', 'success');
-                        this.loadAdminPanel();
-                    }} else {{
-                        this.showMessage(data.error || 'Failed to reject post', 'error');
-                    }}
-                }} catch (error) {{
-                    console.error('Error rejecting post:', error);
-                    this.showMessage('Network error', 'error');
-                }}
-            }}
-            
-            showMessage(message, type = 'success') {{
-                // Remove any existing messages
-                const existingMessages = document.querySelectorAll('.message');
-                existingMessages.forEach(msg => msg.remove());
-                
-                // Create new message element
-                const messageEl = document.createElement('div');
-                messageEl.className = `message ${{type === 'error' ? 'error-message' : 'success-message'}}`;
-                messageEl.textContent = message;
-                
-                // Add to top of app container
-                const appContainer = document.getElementById('appContainer');
-                if (appContainer) {{
-                    appContainer.insertBefore(messageEl, appContainer.firstChild);
-                    
-                    // Remove after 5 seconds
-                    setTimeout(() => {{
-                        if (messageEl.parentNode) {{
-                            messageEl.remove();
-                        }}
-                    }}, 5000);
-                }}
-            }}
-            
-            escapeHtml(text) {{
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }}
-        }}
+    // Christian Vent Mini App - Main JavaScript
+    class ChristianVentApp {
+        constructor() {
+            this.user = null;
+            this.token = null;
+            this.userId = null;
+            this.botUsername = "{bot_username}";
+            this.apiBaseUrl = window.location.origin;
+            this.isAdmin = false;
+            this.init();
+        }
         
-        // Initialize the app when DOM is loaded
-        document.addEventListener('DOMContentLoaded', () => {{
-            window.app = new ChristianVentApp();
-        }});
-    </script>
+        async init() {
+            this.setupEventListeners();
+            
+            // Get token from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            this.token = urlParams.get('token');
+            
+            if (!this.token) {
+                this.showMessage('❌ Authentication required. Please use the /webapp command in the Telegram bot to get access.', 'error');
+                // Redirect to login after 3 seconds
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 3000);
+                return;
+            }
+            
+            // Verify token
+            try {
+                const response = await fetch(`${this.apiBaseUrl}/api/verify-token/${this.token}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    this.showMessage('❌ Session expired. Please get a new link from the Telegram bot.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 3000);
+                    return;
+                }
+                
+                this.userId = data.user_id;
+                await this.loadUserData();
+                
+            } catch (error) {
+                console.error('Error verifying token:', error);
+                this.showMessage('❌ Authentication error. Please try again.', 'error');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 3000);
+                return;
+            }
+            
+            // Load initial data
+            await this.loadPosts();
+            await this.loadLeaderboard();
+        }
+        
+        async loadUserData() {
+            try {
+                const response = await fetch(`${this.apiBaseUrl}/api/mini-app/profile/${this.userId}`);
+                const data = await response.json();
+                if (data.success) {
+                    this.user = data.data;
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+        
+        setupEventListeners() {
+            // Tab switching
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const tab = e.target.dataset.tab;
+                    this.switchTab(tab);
+                });
+            });
+            
+            // Character counter
+            const ventText = document.getElementById('ventText');
+            const charCount = document.getElementById('charCount');
+            if (ventText && charCount) {
+                ventText.addEventListener('input', () => {
+                    charCount.textContent = `${ventText.value.length}/5000 characters`;
+                });
+            }
+            
+            // Submit vent
+            const submitBtn = document.getElementById('submitVent');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', () => this.submitVent());
+            }
+            
+            // Refresh buttons
+            document.getElementById('refreshPosts')?.addEventListener('click', () => this.loadPosts());
+            document.getElementById('refreshLeaderboard')?.addEventListener('click', () => this.loadLeaderboard());
+        }
+        
+        // Helper method for authenticated requests
+        async makeAuthenticatedRequest(url, options = {}) {
+            if (!this.token) {
+                throw new Error('No authentication token');
+            }
+            
+            const headers = {
+                'Authorization': `Bearer ${this.token}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            return fetch(url, {
+                ...options,
+                headers
+            });
+        }
+        
+        async submitVent() {
+            const ventText = document.getElementById('ventText');
+            const categorySelect = document.getElementById('categorySelect');
+            const submitBtn = document.getElementById('submitVent');
+            
+            if (!ventText || !categorySelect || !submitBtn) return;
+            
+            const content = ventText.value.trim();
+            const category = categorySelect.value;
+            
+            if (!content) {
+                this.showMessage('Please write something before posting', 'error');
+                return;
+            }
+            
+            if (content.length > 5000) {
+                this.showMessage('Text is too long (max 5000 characters)', 'error');
+                return;
+            }
+            
+            // Disable button and show loading
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Posting...';
+            submitBtn.disabled = true;
+            
+            try {
+                const response = await this.makeAuthenticatedRequest(`${this.apiBaseUrl}/api/mini-app/submit-vent`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        user_id: this.userId,
+                        content: content,
+                        category: category
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showMessage(data.message, 'success');
+                    
+                    // Clear the form
+                    ventText.value = '';
+                    document.getElementById('charCount').textContent = '0/5000 characters';
+                    
+                    // Switch to posts tab after 2 seconds
+                    setTimeout(() => {
+                        this.switchTab('posts');
+                        this.loadPosts();
+                    }, 2000);
+                    
+                } else {
+                    this.showMessage(data.error || 'Failed to submit vent', 'error');
+                }
+            } catch (error) {
+                console.error('Error submitting vent:', error);
+                this.showMessage('Network error. Please try again.', 'error');
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+        
+        // ... rest of your existing methods (loadPosts, renderPosts, etc.) ...
+        // KEEP ALL YOUR EXISTING METHODS BELOW, ONLY REPLACE THE ABOVE
+        
+        showMessage(message, type = 'success') {
+            // Remove any existing messages
+            const existingMessages = document.querySelectorAll('.message');
+            existingMessages.forEach(msg => msg.remove());
+            
+            // Create new message element
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type === 'error' ? 'error-message' : 'success-message'}`;
+            messageEl.textContent = message;
+            
+            // Add to top of app container
+            const appContainer = document.getElementById('appContainer');
+            if (appContainer) {
+                appContainer.insertBefore(messageEl, appContainer.firstChild);
+                
+                // Remove after 5 seconds
+                setTimeout(() => {
+                    if (messageEl.parentNode) {
+                        messageEl.remove();
+                    }
+                }, 5000);
+            }
+        }
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    }
+    
+    // Initialize the app when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        window.app = new ChristianVentApp();
+    });
+</script>
 </body>
 </html>'''
     
