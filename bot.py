@@ -4768,7 +4768,7 @@ def mini_app_page():
     bot_username = BOT_USERNAME
     app_name = "Christian Vent"
     
-    # Build the HTML for the mini app - FIXED VERSION
+    # Build the HTML for the mini app - SIMPLIFIED VERSION
     html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4777,6 +4777,7 @@ def mini_app_page():
     <title>{app_name} - Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* Keep all your existing CSS styles here */
         * {{
             margin: 0;
             padding: 0;
@@ -4798,493 +4799,8 @@ def mini_app_page():
             min-height: 100vh;
         }}
         
-        /* Header */
-        .app-header {{
-            text-align: center;
-            padding: 20px 0;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #3A4A50;
-        }}
-        
-        .app-title {{
-            color: #BF970B;
-            font-size: 2rem;
-            margin: 0;
-            font-weight: 300;
-            letter-spacing: 1px;
-        }}
-        
-        .app-subtitle {{
-            opacity: 0.8;
-            margin-top: 8px;
-            font-size: 0.95rem;
-        }}
-        
-        /* Tabs */
-        .tab-navigation {{
-            display: flex;
-            background: #2E3A40;
-            border-radius: 10px;
-            margin-bottom: 25px;
-            overflow: hidden;
-            border: 1px solid #3A4A50;
-        }}
-        
-        .tab-btn {{
-            flex: 1;
-            padding: 15px;
-            background: none;
-            border: none;
-            color: #E0E0E0;
-            cursor: pointer;
-            transition: all 0.3s;
-            opacity: 0.7;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }}
-        
-        .tab-btn:hover {{
-            opacity: 1;
-            background: rgba(191, 151, 11, 0.1);
-        }}
-        
-        .tab-btn.active {{
-            opacity: 1;
-            color: #BF970B;
-            background: rgba(191, 151, 11, 0.1);
-        }}
-        
-        /* Tab Content */
-        .tab-content {{
-            margin-top: 10px;
-        }}
-        
-        .tab-pane {{
-            display: none;
-            animation: fadeIn 0.3s ease;
-        }}
-        
-        .tab-pane.active {{
-            display: block;
-        }}
-        
-        @keyframes fadeIn {{
-            from {{ opacity: 0; transform: translateY(10px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-        
-        /* Vent Form */
-        .vent-form-container {{
-            background: #2E3A40;
-            padding: 25px;
-            border-radius: 12px;
-            border: 1px solid #3A4A50;
-            margin-bottom: 25px;
-        }}
-        
-        .form-title {{
-            color: #BF970B;
-            margin-bottom: 10px;
-            font-weight: 400;
-        }}
-        
-        .form-description {{
-            opacity: 0.8;
-            margin-bottom: 20px;
-            line-height: 1.6;
-        }}
-        
-        .category-select {{
-            width: 100%;
-            padding: 12px 15px;
-            background: #272F32;
-            border: 1px solid #3A4A50;
-            color: #E0E0E0;
-            border-radius: 8px;
-            font-size: 1rem;
-            margin-bottom: 20px;
-            cursor: pointer;
-        }}
-        
-        .category-select:focus {{
-            outline: none;
-            border-color: #BF970B;
-        }}
-        
-        .vent-textarea {{
-            width: 100%;
-            min-height: 150px;
-            padding: 15px;
-            background: #272F32;
-            border: 1px solid #3A4A50;
-            color: #E0E0E0;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: inherit;
-            line-height: 1.6;
-            resize: vertical;
-            margin-bottom: 10px;
-        }}
-        
-        .vent-textarea:focus {{
-            outline: none;
-            border-color: #BF970B;
-            box-shadow: 0 0 0 2px rgba(191, 151, 11, 0.2);
-        }}
-        
-        .textarea-footer {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }}
-        
-        .privacy-note {{
-            color: #BF970B;
-            font-size: 0.85rem;
-        }}
-        
-        .submit-btn {{
-            width: 100%;
-            padding: 15px;
-            background: #BF970B;
-            color: #272F32;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }}
-        
-        .submit-btn:hover {{
-            background: #d4a90f;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(191, 151, 11, 0.3);
-        }}
-        
-        .submit-btn:disabled {{
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }}
-        
-        .form-note {{
-            text-align: center;
-            margin-top: 15px;
-            font-size: 0.9rem;
-            opacity: 0.7;
-        }}
-        
-        /* Posts Section */
-        .posts-container {{
-            margin-top: 10px;
-        }}
-        
-        .section-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }}
-        
-        .section-title {{
-            color: #BF970B;
-            font-weight: 400;
-            margin: 0;
-        }}
-        
-        .refresh-btn {{
-            background: #3A4A50;
-            border: 1px solid #3A4A50;
-            color: #E0E0E0;
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-        }}
-        
-        .refresh-btn:hover {{
-            background: #BF970B;
-            color: #272F32;
-        }}
-        
-        /* Post Cards */
-        .post-card {{
-            background: #2E3A40;
-            border: 1px solid #3A4A50;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s;
-            cursor: pointer;
-        }}
-        
-        .post-card:hover {{
-            border-color: #BF970B;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-        }}
-        
-        .post-header {{
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }}
-        
-        .author-avatar {{
-            width: 40px;
-            height: 40px;
-            background: rgba(191, 151, 11, 0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #BF970B;
-            font-weight: bold;
-            margin-right: 12px;
-        }}
-        
-        .author-info h4 {{
-            font-size: 1rem;
-            font-weight: 500;
-            margin: 0 0 5px 0;
-        }}
-        
-        .post-meta {{
-            font-size: 0.85rem;
-            opacity: 0.8;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }}
-        
-        .post-category {{
-            display: inline-block;
-            background: rgba(191, 151, 11, 0.1);
-            color: #BF970B;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-        }}
-        
-        .post-content {{
-            margin: 15px 0;
-            line-height: 1.7;
-            font-size: 1rem;
-        }}
-        
-        .post-footer {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #3A4A50;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }}
-        
-        /* Leaderboard */
-        .leaderboard-container {{
-            background: #2E3A40;
-            border-radius: 12px;
-            border: 1px solid #3A4A50;
-            overflow: hidden;
-        }}
-        
-        .leaderboard-item {{
-            display: flex;
-            align-items: center;
-            padding: 15px 20px;
-            border-bottom: 1px solid #3A4A50;
-            transition: background 0.3s;
-        }}
-        
-        .leaderboard-item:last-child {{
-            border-bottom: none;
-        }}
-        
-        .leaderboard-item:hover {{
-            background: rgba(191, 151, 11, 0.05);
-        }}
-        
-        .leaderboard-rank {{
-            width: 40px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #BF970B;
-        }}
-        
-        .rank-1 {{ color: gold; }}
-        .rank-2 {{ color: silver; }}
-        .rank-3 {{ color: #cd7f32; }}
-        
-        .leaderboard-user {{
-            flex: 1;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }}
-        
-        .user-avatar-small {{
-            width: 40px;
-            height: 40px;
-            background: rgba(191, 151, 11, 0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #BF970B;
-        }}
-        
-        .user-info-small h4 {{
-            font-size: 1rem;
-            font-weight: 500;
-            margin: 0 0 4px 0;
-        }}
-        
-        .user-info-small p {{
-            font-size: 0.85rem;
-            opacity: 0.7;
-            margin: 0;
-        }}
-        
-        .leaderboard-points {{
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #BF970B;
-        }}
-        
-        /* Profile */
-        .profile-container {{
-            background: #2E3A40;
-            border-radius: 12px;
-            border: 1px solid #3A4A50;
-            padding: 25px;
-        }}
-        
-        .profile-header {{
-            text-align: center;
-            margin-bottom: 25px;
-        }}
-        
-        .profile-avatar {{
-            width: 100px;
-            height: 100px;
-            background: rgba(191, 151, 11, 0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            color: #BF970B;
-            margin: 0 auto 15px;
-        }}
-        
-        .profile-header h2 {{
-            font-size: 1.8rem;
-            margin: 0 0 10px 0;
-        }}
-        
-        .profile-rating {{
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(191, 151, 11, 0.1);
-            padding: 8px 16px;
-            border-radius: 20px;
-            margin-top: 10px;
-        }}
-        
-        /* Footer */
-        .app-footer {{
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #3A4A50;
-            text-align: center;
-            font-size: 0.9rem;
-            opacity: 0.7;
-        }}
-        
-        .telegram-link {{
-            color: #BF970B;
-            text-decoration: none;
-        }}
-        
-        .telegram-link:hover {{
-            text-decoration: underline;
-        }}
-        
-        /* Messages */
-        .message {{
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            text-align: center;
-            animation: slideIn 0.3s ease;
-        }}
-        
-        .error-message {{
-            background: rgba(255, 0, 0, 0.1);
-            border: 1px solid rgba(255, 0, 0, 0.3);
-            color: #ff6b6b;
-        }}
-        
-        .success-message {{
-            background: rgba(0, 255, 0, 0.1);
-            border: 1px solid rgba(0, 255, 0, 0.3);
-            color: #51cf66;
-        }}
-        
-        @keyframes slideIn {{
-            from {{ opacity: 0; transform: translateY(-10px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-        
-        /* Loading */
-        .loading {{
-            text-align: center;
-            padding: 40px;
-            color: #BF970B;
-        }}
-        
-        /* Empty States */
-        .empty-state {{
-            text-align: center;
-            padding: 40px;
-            opacity: 0.7;
-        }}
-        
-        /* Responsive */
-        @media (max-width: 768px) {{
-            .app-container {{
-                padding: 15px;
-            }}
-            
-            .app-title {{
-                font-size: 1.5rem;
-            }}
-            
-            .tab-btn {{
-                padding: 12px;
-                font-size: 0.85rem;
-            }}
-            
-            .vent-form-container {{
-                padding: 20px;
-            }}
-            
-            .post-card {{
-                padding: 15px;
-            }}
-        }}
+        /* ... (keep all your CSS styles, but double the curly braces) ... */
+        /* For example: background: rgba(191, 151, 11, 0.1); becomes background: rgba(191, 151, 11, 0.1); */
     </style>
 </head>
 <body>
@@ -5348,13 +4864,6 @@ def mini_app_page():
                 </div>
             </div>
             
-            <!-- Add admin tab content -->
-            <div id="admin-tab" class="tab-pane">
-                <div id="adminContainer">
-                    <!-- Admin panel will be loaded here -->
-                </div>
-            </div>
-            
             <!-- Posts Tab -->
             <div id="posts-tab" class="tab-pane">
                 <div class="section-header">
@@ -5400,224 +4909,406 @@ def mini_app_page():
     </div>
     
     <script>
-    // Christian Vent Mini App - Main JavaScript
-    class ChristianVentApp {
-        constructor() {
-            this.user = null;
-            this.token = null;
-            this.userId = null;
-            this.botUsername = "{bot_username}";
-            this.apiBaseUrl = window.location.origin;
-            this.isAdmin = false;
-            this.init();
-        }
+        // Christian Vent Mini App - Fixed JavaScript
+        document.addEventListener('DOMContentLoaded', function() {{
+            const app = new ChristianVentApp();
+            window.app = app;
+        }});
         
-        async init() {
-            this.setupEventListeners();
+        class ChristianVentApp {{
+            constructor() {{
+                this.user = null;
+                this.token = null;
+                this.userId = null;
+                this.botUsername = "{bot_username}";
+                this.apiBaseUrl = window.location.origin;
+                this.init();
+            }}
             
-            // Get token from URL
-            const urlParams = new URLSearchParams(window.location.search);
-            this.token = urlParams.get('token');
-            
-            if (!this.token) {
-                this.showMessage('❌ Authentication required. Please use the /webapp command in the Telegram bot to get access.', 'error');
-                // Redirect to login after 3 seconds
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 3000);
-                return;
-            }
-            
-            // Verify token
-            try {
-                const response = await fetch(`${this.apiBaseUrl}/api/verify-token/${this.token}`);
-                const data = await response.json();
+            async init() {{
+                this.setupEventListeners();
                 
-                if (!data.success) {
-                    this.showMessage('❌ Session expired. Please get a new link from the Telegram bot.', 'error');
-                    setTimeout(() => {
+                // Get token from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                this.token = urlParams.get('token');
+                
+                if (!this.token) {{
+                    this.showMessage('Authentication required. Please use the /webapp command in the Telegram bot.', 'error');
+                    // Redirect to login after 3 seconds
+                    setTimeout(() => {{
                         window.location.href = '/login';
-                    }, 3000);
+                    }}, 3000);
                     return;
-                }
+                }}
                 
-                this.userId = data.user_id;
-                await this.loadUserData();
-                
-            } catch (error) {
-                console.error('Error verifying token:', error);
-                this.showMessage('❌ Authentication error. Please try again.', 'error');
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 3000);
-                return;
-            }
-            
-            // Load initial data
-            await this.loadPosts();
-            await this.loadLeaderboard();
-        }
-        
-        async loadUserData() {
-            try {
-                const response = await fetch(`${this.apiBaseUrl}/api/mini-app/profile/${this.userId}`);
-                const data = await response.json();
-                if (data.success) {
-                    this.user = data.data;
-                }
-            } catch (error) {
-                console.error('Error loading user data:', error);
-            }
-        }
-        
-        setupEventListeners() {
-            // Tab switching
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const tab = e.target.dataset.tab;
-                    this.switchTab(tab);
-                });
-            });
-            
-            // Character counter
-            const ventText = document.getElementById('ventText');
-            const charCount = document.getElementById('charCount');
-            if (ventText && charCount) {
-                ventText.addEventListener('input', () => {
-                    charCount.textContent = `${ventText.value.length}/5000 characters`;
-                });
-            }
-            
-            // Submit vent
-            const submitBtn = document.getElementById('submitVent');
-            if (submitBtn) {
-                submitBtn.addEventListener('click', () => this.submitVent());
-            }
-            
-            // Refresh buttons
-            document.getElementById('refreshPosts')?.addEventListener('click', () => this.loadPosts());
-            document.getElementById('refreshLeaderboard')?.addEventListener('click', () => this.loadLeaderboard());
-        }
-        
-        // Helper method for authenticated requests
-        async makeAuthenticatedRequest(url, options = {}) {
-            if (!this.token) {
-                throw new Error('No authentication token');
-            }
-            
-            const headers = {
-                'Authorization': `Bearer ${this.token}`,
-                'Content-Type': 'application/json',
-                ...options.headers
-            };
-            
-            return fetch(url, {
-                ...options,
-                headers
-            });
-        }
-        
-        async submitVent() {
-            const ventText = document.getElementById('ventText');
-            const categorySelect = document.getElementById('categorySelect');
-            const submitBtn = document.getElementById('submitVent');
-            
-            if (!ventText || !categorySelect || !submitBtn) return;
-            
-            const content = ventText.value.trim();
-            const category = categorySelect.value;
-            
-            if (!content) {
-                this.showMessage('Please write something before posting', 'error');
-                return;
-            }
-            
-            if (content.length > 5000) {
-                this.showMessage('Text is too long (max 5000 characters)', 'error');
-                return;
-            }
-            
-            // Disable button and show loading
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Posting...';
-            submitBtn.disabled = true;
-            
-            try {
-                const response = await this.makeAuthenticatedRequest(`${this.apiBaseUrl}/api/mini-app/submit-vent`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        user_id: this.userId,
-                        content: content,
-                        category: category
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    this.showMessage(data.message, 'success');
+                // Verify token
+                try {{
+                    const response = await fetch(`${{this.apiBaseUrl}}/api/verify-token/${{this.token}}`);
+                    const data = await response.json();
                     
-                    // Clear the form
-                    ventText.value = '';
-                    document.getElementById('charCount').textContent = '0/5000 characters';
+                    if (!data.success) {{
+                        this.showMessage('Session expired. Please get a new link from the Telegram bot.', 'error');
+                        setTimeout(() => {{
+                            window.location.href = '/login';
+                        }}, 3000);
+                        return;
+                    }}
                     
-                    // Switch to posts tab after 2 seconds
-                    setTimeout(() => {
-                        this.switchTab('posts');
-                        this.loadPosts();
-                    }, 2000);
+                    this.userId = data.user_id;
+                    await this.loadUserData();
                     
-                } else {
-                    this.showMessage(data.error || 'Failed to submit vent', 'error');
-                }
-            } catch (error) {
-                console.error('Error submitting vent:', error);
-                this.showMessage('Network error. Please try again.', 'error');
-            } finally {
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            }
-        }
-        
-        // ... rest of your existing methods (loadPosts, renderPosts, etc.) ...
-        // KEEP ALL YOUR EXISTING METHODS BELOW, ONLY REPLACE THE ABOVE
-        
-        showMessage(message, type = 'success') {
-            // Remove any existing messages
-            const existingMessages = document.querySelectorAll('.message');
-            existingMessages.forEach(msg => msg.remove());
-            
-            // Create new message element
-            const messageEl = document.createElement('div');
-            messageEl.className = `message ${type === 'error' ? 'error-message' : 'success-message'}`;
-            messageEl.textContent = message;
-            
-            // Add to top of app container
-            const appContainer = document.getElementById('appContainer');
-            if (appContainer) {
-                appContainer.insertBefore(messageEl, appContainer.firstChild);
+                }} catch (error) {{
+                    console.error('Error verifying token:', error);
+                    this.showMessage('Authentication error. Please try again.', 'error');
+                    setTimeout(() => {{
+                        window.location.href = '/login';
+                    }}, 3000);
+                    return;
+                }}
                 
-                // Remove after 5 seconds
-                setTimeout(() => {
-                    if (messageEl.parentNode) {
-                        messageEl.remove();
-                    }
-                }, 5000);
-            }
-        }
-        
-        escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-    }
-    
-    // Initialize the app when DOM is loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        window.app = new ChristianVentApp();
-    });
-</script>
+                // Load initial data
+                await this.loadPosts();
+                await this.loadLeaderboard();
+            }}
+            
+            async loadUserData() {{
+                try {{
+                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/profile/${{this.userId}}`);
+                    const data = await response.json();
+                    if (data.success) {{
+                        this.user = data.data;
+                    }}
+                }} catch (error) {{
+                    console.error('Error loading user data:', error);
+                }}
+            }}
+            
+            setupEventListeners() {{
+                // Tab switching
+                document.querySelectorAll('.tab-btn').forEach(btn => {{
+                    btn.addEventListener('click', (e) => {{
+                        const tab = e.target.dataset.tab;
+                        this.switchTab(tab);
+                    }});
+                }});
+                
+                // Character counter
+                const ventText = document.getElementById('ventText');
+                const charCount = document.getElementById('charCount');
+                if (ventText && charCount) {{
+                    ventText.addEventListener('input', () => {{
+                        charCount.textContent = `${{ventText.value.length}}/5000 characters`;
+                    }});
+                }}
+                
+                // Submit vent
+                const submitBtn = document.getElementById('submitVent');
+                if (submitBtn) {{
+                    submitBtn.addEventListener('click', () => this.submitVent());
+                }}
+                
+                // Refresh buttons
+                document.getElementById('refreshPosts')?.addEventListener('click', () => this.loadPosts());
+                document.getElementById('refreshLeaderboard')?.addEventListener('click', () => this.loadLeaderboard());
+            }}
+            
+            async makeAuthenticatedRequest(url, options = {{}}) {{
+                if (!this.token) {{
+                    throw new Error('No authentication token');
+                }}
+                
+                const headers = {{
+                    'Authorization': `Bearer ${{this.token}}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }};
+                
+                return fetch(url, {{
+                    ...options,
+                    headers
+                }});
+            }}
+            
+            async submitVent() {{
+                const ventText = document.getElementById('ventText');
+                const categorySelect = document.getElementById('categorySelect');
+                const submitBtn = document.getElementById('submitVent');
+                
+                if (!ventText || !categorySelect || !submitBtn) return;
+                
+                const content = ventText.value.trim();
+                const category = categorySelect.value;
+                
+                if (!content) {{
+                    this.showMessage('Please write something before posting', 'error');
+                    return;
+                }}
+                
+                if (content.length > 5000) {{
+                    this.showMessage('Text is too long (max 5000 characters)', 'error');
+                    return;
+                }}
+                
+                // Disable button and show loading
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'Posting...';
+                submitBtn.disabled = true;
+                
+                try {{
+                    const response = await this.makeAuthenticatedRequest(`${{this.apiBaseUrl}}/api/mini-app/submit-vent`, {{
+                        method: 'POST',
+                        body: JSON.stringify({{
+                            user_id: this.userId,
+                            content: content,
+                            category: category
+                        }})
+                    }});
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        this.showMessage(data.message, 'success');
+                        
+                        // Clear the form
+                        ventText.value = '';
+                        document.getElementById('charCount').textContent = '0/5000 characters';
+                        
+                        // Switch to posts tab after 2 seconds
+                        setTimeout(() => {{
+                            this.switchTab('posts');
+                            this.loadPosts();
+                        }}, 2000);
+                        
+                    }} else {{
+                        this.showMessage(data.error || 'Failed to submit vent', 'error');
+                    }}
+                }} catch (error) {{
+                    console.error('Error submitting vent:', error);
+                    this.showMessage('Network error. Please try again.', 'error');
+                }} finally {{
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }}
+            }}
+            
+            switchTab(tabName) {{
+                // Update active tab button
+                document.querySelectorAll('.tab-btn').forEach(btn => {{
+                    btn.classList.toggle('active', btn.dataset.tab === tabName);
+                }});
+                
+                // Update active tab pane
+                document.querySelectorAll('.tab-pane').forEach(pane => {{
+                    pane.classList.toggle('active', pane.id === `${{tabName}}-tab`);
+                }});
+                
+                // Load data for the tab if needed
+                if (tabName === 'profile' && this.userId) {{
+                    this.loadProfile(this.userId);
+                }}
+            }}
+            
+            async loadPosts() {{
+                const container = document.getElementById('postsContainer');
+                if (!container) return;
+                
+                container.innerHTML = '<div class="loading">Loading community posts...</div>';
+                
+                try {{
+                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/get-posts?page=1&per_page=10`);
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        this.renderPosts(data.data);
+                    }} else {{
+                        container.innerHTML = `
+                            <div class="error-message">
+                                Failed to load posts: ${{data.error || 'Unknown error'}}
+                            </div>
+                        `;
+                    }}
+                }} catch (error) {{
+                    console.error('Error loading posts:', error);
+                    container.innerHTML = `
+                        <div class="error-message">
+                            Network error. Please check your connection.
+                        </div>
+                    `;
+                }}
+            }}
+            
+            renderPosts(posts) {{
+                const container = document.getElementById('postsContainer');
+                if (!container) return;
+                
+                if (!posts || posts.length === 0) {{
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3 style="color: #BF970B;">No posts yet</h3>
+                            <p style="opacity: 0.8; margin-bottom: 20px;">Be the first to share what's on your heart</p>
+                            <button onclick="app.switchTab('vent')" 
+                                    style="background: #BF970B; color: #272F32; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                Share Your First Vent
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }}
+                
+                container.innerHTML = posts.map(post => `
+                    <div class="post-card">
+                        <div class="post-header">
+                            <div class="author-avatar">
+                                ${{post.author.sex || '👤'}}
+                            </div>
+                            <div class="author-info">
+                                <h4>${{post.author.name}}</h4>
+                                <div class="post-meta">
+                                    <span class="post-category">${{post.category}}</span>
+                                    <span>•</span>
+                                    <span>${{post.time_ago}}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="post-content">
+                            ${{this.escapeHtml(post.content)}}
+                        </div>
+                        
+                        <div class="post-footer">
+                            <div class="comment-count">
+                                💬 ${{post.comments}} comment${{post.comments !== 1 ? 's' : ''}}
+                            </div>
+                            <button onclick="window.open('https://t.me/${{this.botUsername}}?start=comments_${{post.id}}', '_blank')" 
+                                    style="background: transparent; color: #BF970B; border: 1px solid #BF970B; padding: 5px 15px; border-radius: 5px; font-size: 0.9rem; cursor: pointer;">
+                                View in Bot
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }}
+            
+            async loadLeaderboard() {{
+                const container = document.getElementById('leaderboardContainer');
+                if (!container) return;
+                
+                container.innerHTML = '<div class="loading">Loading leaderboard...</div>';
+                
+                try {{
+                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/leaderboard`);
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        this.renderLeaderboard(data.data);
+                    }} else {{
+                        container.innerHTML = '<div class="error-message">Failed to load leaderboard</div>';
+                    }}
+                }} catch (error) {{
+                    console.error('Error loading leaderboard:', error);
+                    container.innerHTML = '<div class="error-message">Network error</div>';
+                }}
+            }}
+            
+            renderLeaderboard(users) {{
+                const container = document.getElementById('leaderboardContainer');
+                if (!container) return;
+                
+                container.innerHTML = users.map((user, index) => `
+                    <div class="leaderboard-item">
+                        <div class="leaderboard-rank rank-${{index + 1}}">${{index + 1}}</div>
+                        <div class="leaderboard-user">
+                            <div class="user-avatar-small">${{user.sex || '👤'}}</div>
+                            <div class="user-info-small">
+                                <h4>${{user.name}}</h4>
+                                <p>${{user.aura}} Contributor</p>
+                            </div>
+                        </div>
+                        <div class="leaderboard-points">${{user.points}} pts</div>
+                    </div>
+                `).join('');
+            }}
+            
+            async loadProfile(userId) {{
+                const container = document.getElementById('profileContainer');
+                if (!container) return;
+                
+                container.innerHTML = '<div class="loading">Loading profile...</div>';
+                
+                try {{
+                    const response = await fetch(`${{this.apiBaseUrl}}/api/mini-app/profile/${{userId}}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {{
+                        const profile = data.data;
+                        container.innerHTML = `
+                            <div class="profile-header">
+                                <div class="profile-avatar">
+                                    ${{profile.sex || '👤'}}
+                                </div>
+                                <h2>${{profile.name}}</h2>
+                                <div class="profile-rating">
+                                    ${{profile.aura}} ${{profile.rating}} points
+                                </div>
+                            </div>
+                            
+                            <div style="background: rgba(191, 151, 11, 0.1); padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                <h4 style="color: #BF970B; margin-bottom: 10px;">Your Statistics</h4>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+                                    <div>
+                                        <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">${{profile.stats.posts}}</div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Vents</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">${{profile.stats.comments}}</div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Comments</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 2rem; font-weight: 600; color: #BF970B;">${{profile.stats.followers}}</div>
+                                        <div style="font-size: 0.9rem; opacity: 0.8;">Followers</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }} else {{
+                        container.innerHTML = '<div class="error-message">Failed to load profile</div>';
+                    }}
+                }} catch (error) {{
+                    console.error('Error loading profile:', error);
+                    container.innerHTML = '<div class="error-message">Network error</div>';
+                }}
+            }}
+            
+            showMessage(message, type = 'success') {{
+                // Remove any existing messages
+                const existingMessages = document.querySelectorAll('.message');
+                existingMessages.forEach(msg => msg.remove());
+                
+                // Create new message element
+                const messageEl = document.createElement('div');
+                messageEl.className = `message ${{type === 'error' ? 'error-message' : 'success-message'}}`;
+                messageEl.textContent = message;
+                
+                // Add to top of app container
+                const appContainer = document.getElementById('appContainer');
+                if (appContainer) {{
+                    appContainer.insertBefore(messageEl, appContainer.firstChild);
+                    
+                    // Remove after 5 seconds
+                    setTimeout(() => {{
+                        if (messageEl.parentNode) {{
+                            messageEl.remove();
+                        }}
+                    }}, 5000);
+                }}
+            }}
+            
+            escapeHtml(text) {{
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }}
+        }}
+    </script>
 </body>
 </html>'''
     
