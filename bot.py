@@ -808,7 +808,6 @@ def get_cancel_reply_keyboard():
         ],
         resize_keyboard=True,
         one_time_keyboard=True,  # Set to True so it disappears after use
-        resize_keyboard=True
     )
 def get_display_name(user_data):
     if user_data and user_data.get('anonymous_name'):
