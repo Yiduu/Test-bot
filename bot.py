@@ -304,6 +304,16 @@ async def fix_vent_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logger.error(f"Error in fix_vent_numbers: {e}")
                         await update.message.reply_text(f"❌ Error: {str(e)}")
+
+def escape_markdown_v2(text):
+    """Escape all special characters for MarkdownV2"""
+    if not text:
+        return ""
+    # Escape all special characters for MarkdownV2
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    for char in escape_chars:
+        text = text.replace(char, '\\' + char)
+    return text
 async def show_loading(update_or_message, loading_text="⏳ Processing...", edit_message=True):
     """Show a loading animation"""
     try:
@@ -2655,8 +2665,7 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
     file_id = comment['file_id']
     content = comment['content']
     
-    # NEW: Check if this is the vent author (if we have that info in context)
-    # This helps ensure consistency across all comment displays
+    # Check if this is the vent author (if we have that info in context)
     is_vent_author = False
     if hasattr(context, '_post_author_id') and context._post_author_id:
         if str(comment['author_id']) == str(context._post_author_id):
@@ -2712,9 +2721,19 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
 
     # Send message based on comment type
     try:
+        # Helper function to escape markdown properly
+        def escape_markdown_v2(text):
+            if not text:
+                return ""
+            # Escape all special characters for MarkdownV2
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+            for char in escape_chars:
+                text = text.replace(char, '\\' + char)
+            return text
+        
         if comment_type == 'text':
-            # FIX: Escape markdown characters properly
-            escaped_content = escape_markdown(content, version=2)
+            # Escape markdown characters properly
+            escaped_content = escape_markdown_v2(content)
             message_text = f"{escaped_content}\n\n{author_text}"
             msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -2727,8 +2746,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             return msg.message_id
             
         elif comment_type == 'voice':
-            # FIX: Escape markdown in caption
-            escaped_caption = escape_markdown(content, version=2) if content else ""
+            # Escape markdown in caption
+            escaped_caption = escape_markdown_v2(content) if content else ""
             caption = f"{escaped_caption}\n\n{author_text}" if escaped_caption else author_text
             msg = await context.bot.send_voice(
                 chat_id=chat_id,
@@ -2741,8 +2760,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             return msg.message_id
             
         elif comment_type == 'gif':
-            # FIX: Escape markdown in caption
-            escaped_caption = escape_markdown(content, version=2) if content else ""
+            # Escape markdown in caption
+            escaped_caption = escape_markdown_v2(content) if content else ""
             caption = f"{escaped_caption}\n\n{author_text}" if escaped_caption else author_text
             msg = await context.bot.send_animation(
                 chat_id=chat_id,
@@ -2761,8 +2780,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
                 sticker=file_id,
                 reply_to_message_id=reply_to_message_id
             )
-            # FIX: Escape markdown in author_text
-            escaped_author_text = escape_markdown(author_text, version=2)
+            # Escape markdown in author_text
+            escaped_author_text = escape_markdown_v2(author_text)
             author_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=escaped_author_text,
@@ -2774,7 +2793,7 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             
         else:
             # Fallback for unknown types
-            escaped_content = escape_markdown(content, version=2)
+            escaped_content = escape_markdown_v2(content)
             message_text = f"[{comment_type.upper()}] {escaped_content}\n\n{author_text}"
             msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -3699,13 +3718,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 preview_text = "Original content not found"
                 if post:
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
-                    preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
+                    # Use simple text without markdown for preview
+                    preview_text = f"💬 Replying to:\n{content}"
+                
                 await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
+                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
                     reply_markup=cancel_menu,
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    parse_mode=ParseMode.HTML  # Changed to HTML to avoid markdown issues
                 )
-
+                return
         # FIXED: Like/Dislike reaction handling
         elif query.data.startswith(("likecomment_", "dislikecomment_", "likereply_", "dislikereply_")):
             try:
@@ -4034,12 +4055,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 preview_text = "Original comment not found"
                 if comment:
                     content = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
-                    preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
+                    # Use simple text without markdown for preview
+                    preview_text = f"💬 Replying to:\n{content}"
                 
                 await query.message.reply_text(
                     f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
                     reply_markup=cancel_menu,
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    parse_mode=ParseMode.HTML  # Changed to HTML
                 )
                 
         elif query.data.startswith("replytoreply_"):
@@ -4058,12 +4080,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 preview_text = "Original reply not found"
                 if comment:
                     content = comment['content'][:100] + '...' if len(comment['content']) > 100 else comment['content']
-                    preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
+                    # Use simple text without markdown for preview
+                    preview_text = f"💬 Replying to:\n{content}"
         
                 await query.message.reply_text(
                     f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
                     reply_markup=cancel_menu,
-                    parse_mode=ParseMode.MARKDOWN_V2
+                    parse_mode=ParseMode.HTML  # Changed to HTML
                 )
         # UPDATED: Handle Previous Posts pagination
         elif query.data.startswith("previous_posts_"):
