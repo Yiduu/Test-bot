@@ -4733,49 +4733,49 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     thread_from_post_id = context.user_data.get('thread_from_post_id')
     
     elif user and user['waiting_for_post']:
-    category = user['selected_category']
-    
-    post_content = ""
-    media_type = 'text'
-    media_id = None
-    
-    try:
-        if update.message.text:
-            post_content = update.message.text
-            media_type = 'text'
-        elif update.message.photo:
-            photo = update.message.photo[-1]
-            media_id = photo.file_id
-            media_type = 'photo'
-            post_content = update.message.caption or ""
-        elif update.message.voice:
-            voice = update.message.voice
-            media_id = voice.file_id
-            media_type = 'voice'
-            post_content = update.message.caption or ""
-        else:
-            if text in ["❌ Cancel", "cancel"]:
-                await reset_user_waiting_states(
-                    user_id, 
-                    update.message.chat.id, 
-                    context
-                )
-                await update.message.reply_text("❌ Input cancelled.", reply_markup=main_menu)
-                return
-            post_content = "(Unsupported content type)"
-    except Exception as e:
-        logger.error(f"Error reading media: {e}")
-        post_content = "(Unsupported content type)" 
-    
-    # FIX: Reset user state for BOTH text and media posts
-    db_execute(
-        "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
-        (user_id,)
-    )
-    
-    # Send confirmation
-    await send_post_confirmation(update, context, post_content, category, media_type, media_id, thread_from_post_id=thread_from_post_id)
-    return
+        category = user['selected_category']
+        
+        post_content = ""
+        media_type = 'text'
+        media_id = None
+        
+        try:
+            if update.message.text:
+                post_content = update.message.text
+                media_type = 'text'
+            elif update.message.photo:
+                photo = update.message.photo[-1]
+                media_id = photo.file_id
+                media_type = 'photo'
+                post_content = update.message.caption or ""
+            elif update.message.voice:
+                voice = update.message.voice
+                media_id = voice.file_id
+                media_type = 'voice'
+                post_content = update.message.caption or ""
+            else:
+                if text in ["❌ Cancel", "cancel"]:
+                    await reset_user_waiting_states(
+                        user_id, 
+                        update.message.chat.id, 
+                        context
+                    )
+                    await update.message.reply_text("❌ Input cancelled.", reply_markup=main_menu)
+                    return
+                post_content = "(Unsupported content type)"
+        except Exception as e:
+            logger.error(f"Error reading media: {e}")
+            post_content = "(Unsupported content type)" 
+        
+        # FIX: Reset user state for BOTH text and media posts
+        db_execute(
+            "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
+            (user_id,)
+        )
+        
+        # Send confirmation
+        await send_post_confirmation(update, context, post_content, category, media_type, media_id, thread_from_post_id=thread_from_post_id)
+        return
 
     elif user and user['waiting_for_comment']:
         post_id = user['comment_post_id']
