@@ -3690,10 +3690,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 await query.message.reply_text(
-                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:",
-                    reply_markup= ,
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
+                    reply_markup=cancel_menu,
                     parse_mode=ParseMode.MARKDOWN_V2
-                )
+                
 
         # FIXED: Like/Dislike reaction handling
         elif query.data.startswith(("likecomment_", "dislikecomment_", "likereply_", "dislikereply_")):
