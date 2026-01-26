@@ -150,13 +150,8 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 ''')
-                
 
-                
-                
-                
-                
-                def assign_vent_numbers_to_existing_posts():
+def assign_vent_numbers_to_existing_posts():
                     """Assign vent numbers to existing approved posts"""
                     try:
                         # Get all approved posts without vent numbers
@@ -211,6 +206,16 @@ def init_db():
                         
                     except Exception as e:
                         logger.error(f"Error assigning vent numbers: {e}")
+
+
+        
+                
+
+                
+                
+                
+                
+                
 
                 async def fix_vent_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     """Admin command to fix vent numbers"""
