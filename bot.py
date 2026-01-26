@@ -6085,7 +6085,7 @@ def mini_app_get_posts():
                 p.timestamp,
                 p.comment_count,
                 p.media_type,
-                u.sex as author_sex  # GET SEX ONLY
+                u.sex as author_sex
             FROM posts p
             JOIN users u ON p.author_id = u.user_id
             WHERE p.approved = TRUE
