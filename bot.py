@@ -410,8 +410,9 @@ def db_fetch_one(query, params=()):
 
 def db_fetch_all(query, params=()):
     return db_execute(query, params, fetch=True)
-def reset_user_waiting_states(user_id: str):
-    """Reset all waiting states for a user"""
+async def reset_user_waiting_states(user_id: str, chat_id: int = None, context: ContextTypes.DEFAULT_TYPE = None):
+    """Reset all waiting states for a user and optionally restore main menu"""
+    # Reset database states
     db_execute('''
         UPDATE users 
         SET waiting_for_post = FALSE, 
@@ -424,6 +425,17 @@ def reset_user_waiting_states(user_id: str):
             private_message_target = NULL
         WHERE user_id = %s
     ''', (user_id,))
+    
+    # If chat_id and context are provided, restore main menu
+    if chat_id and context:
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="What would you like to do next?",
+                reply_markup=main_menu
+            )
+        except Exception as e:
+            logger.error(f"Error restoring main menu: {e}")
 # Categories
 CATEGORIES = [
     ("🙏 Pray For Me", "PrayForMe"),
@@ -729,13 +741,14 @@ main_menu = ReplyKeyboardMarkup(
     resize_keyboard=True,
     one_time_keyboard=False
 )
-
-
-def create_cancel_keyboard():
-    """Create a keyboard with cancel button"""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
-    ])
+# Cancel-only menu for input states
+cancel_menu = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton("❌ Cancel")]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=False
+)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -794,7 +807,7 @@ def count_all_comments(post_id):
         return total
     
     return count_replies()
-def get_cancel_keyboard():
+def  :
     """Create cancel keyboard for input states ONLY"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
@@ -2008,11 +2021,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     content = post['content'][:100] + '...' if len(post['content']) > 100 else post['content']
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
-                await update.message.reply_text(
-                    f"{preview_text}\n\n✍️ Please type your comment:",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
-                    ]),
+                await query.message.reply_text(
+                    f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
+                    reply_markup=cancel_menu,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 return
@@ -3494,9 +3505,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         
             await query.message.reply_text(
-                f"✍️ *Please type your thought for #{category}:*\n\nYou may also send a photo or voice message.",
+                f"✍️ *Please type your thought for #{category}:*\n\nYou may also send a photo or voice message.\n\nTap ❌ Cancel to return to menu.",
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=get_cancel_keyboard()
+                reply_markup=cancel_menu
             )
         
         elif query.data == 'menu':
@@ -3529,8 +3540,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Handle cancel input button
         elif query.data == 'cancel_input':
-            # Reset all waiting states
-            reset_user_waiting_states(user_id)
+            # Reset all waiting states and restore main menu
+            await reset_user_waiting_states(
+                user_id, 
+                query.message.chat.id, 
+                context
+            )
             
             # Clear any context data
             if 'editing_comment' in context.user_data:
@@ -3540,30 +3555,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if 'thread_from_post_id' in context.user_data:
                 del context.user_data['thread_from_post_id']
             
-            # Send confirmation and main menu
-            await query.answer("❌ Input cancelled", show_alert=False)
+            # Send confirmation and restore main menu
+            await query.answer("❌ Input cancelled")
             
-            keyboard = [
-                [
-                    InlineKeyboardButton("📱 Main Menu", callback_data='menu'),
-                    InlineKeyboardButton("👤 Profile", callback_data='profile')
-                ]
-            ]
+            await query.message.reply_text(
+                "❌ *Input cancelled*\n\nWhat would you like to do next?",
+                reply_markup=main_menu,
+                parse_mode=ParseMode.MARKDOWN
+            )
             
-            try:
-                await query.message.edit_text(
-                    "❌ *Input cancelled*\n\nWhat would you like to do next?",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            except BadRequest:
-                await query.message.reply_text(
-                    "❌ *Input cancelled*\n\nWhat would you like to do next?",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            
-            return  # Important: Return to prevent processing other callbacks
+            return
 
         elif query.data == 'profile':
             await send_updated_profile(user_id, query.message.chat.id, context)
@@ -3624,9 +3625,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 (user_id,)
             )
             await query.message.reply_text(
-                "✏️ Please type your new anonymous name:", 
+                "✏️ Please type your new anonymous name:\n\nTap ❌ Cancel to return to menu.",
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=get_cancel_keyboard()
+                reply_markup=cancel_menu
             )
 
         elif query.data == 'edit_sex':
@@ -3696,7 +3697,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 await query.message.reply_text(
                     f"{preview_text}\n\n✍️ Please type your comment or send a voice message, GIF, or sticker:",
-                    reply_markup=get_cancel_keyboard(),
+                    reply_markup= ,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
 
@@ -4006,9 +4007,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_name = target_user['anonymous_name']
                 
                 await query.message.reply_text(
-                    f"↩️ *Replying to {target_name}*\n\nPlease type your message:",
+                    f"↩️ *Replying to {target_name}*\n\nPlease type your message:\n\nTap ❌ Cancel to return to menu.",
                     parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=get_cancel_keyboard()
+                    reply_markup=cancel_menu
                 )
                 
             except Exception as e:
@@ -4031,8 +4032,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
                 
                 await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:",
-                    reply_markup=get_cancel_keyboard(),
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
+                    reply_markup=cancel_menu,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 
@@ -4055,8 +4056,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     preview_text = f"💬 *Replying to:*\n{escape_markdown(content, version=2)}"
         
                 await query.message.reply_text(
-                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:",
-                    reply_markup=get_cancel_keyboard(),
+                    f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
+                    reply_markup=cancel_menu,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
         # UPDATED: Handle Previous Posts pagination
@@ -4392,9 +4393,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target_name = target_user['anonymous_name'] if target_user else "this user"
             
             await query.message.reply_text(
-                f"✉️ *Composing message to {target_name}*\n\nPlease type your message:",
+                f"✉️ *Composing message to {target_name}*\n\nPlease type your message:\n\nTap ❌ Cancel to return to menu.",
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=get_cancel_keyboard()
+                reply_markup=cancel_menu
             )
             
         
@@ -4489,7 +4490,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user and (user['waiting_for_post'] or user['waiting_for_comment'] or 
                      user['awaiting_name'] or user['waiting_for_private_message']):
             # Reset all waiting states
-            reset_user_waiting_states(user_id)
+            await reset_user_waiting_states(
+                user_id, 
+                update.message.chat.id, 
+                context
+            )
             
             # Clear any context data
             context_keys = ['editing_comment', 'editing_post', 'thread_from_post_id', 
@@ -4500,7 +4505,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(
                 "❌ Input cancelled.",
-                reply_markup=main_menu  # Return to main menu
+                reply_markup=main_menu
             )
         else:
             # User not in input state, just show main menu
@@ -4692,7 +4697,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 post_content = update.message.caption or ""
             else:
                 if update.message.text in ["❌ Cancel", "cancel"]:
-                    reset_user_waiting_states(user_id)
+                    await reset_user_waiting_states(
+                    user_id, 
+                    update.message.chat.id, 
+                    context
+                )
                     await update.message.reply_text("❌ Input cancelled.", reply_markup=main_menu)
                     return
                 post_content = "(Unsupported content type)"
