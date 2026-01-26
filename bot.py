@@ -807,11 +807,6 @@ def count_all_comments(post_id):
         return total
     
     return count_replies()
-def  :
-    """Create cancel keyboard for input states ONLY"""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
-    ])
 
 def get_cancel_reply_keyboard():
     """Create cancel button for reply keyboard (text) - ONLY for input states"""
