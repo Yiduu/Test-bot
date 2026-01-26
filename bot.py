@@ -1786,7 +1786,10 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         return
     
     try:
-        # Format the post content for the channel
+        # Get the next vent number FIRST
+        max_vent = db_fetch_one("SELECT MAX(vent_number) as max_num FROM posts WHERE approved = TRUE")
+        next_vent_number = (max_vent['max_num'] or 0) + 1
+        
         # Format the post content for the channel with vent number
         hashtag = f"#{post['category']}"
         
@@ -1849,11 +1852,6 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
             await query.answer("❌ Unsupported media type.", show_alert=True)
             return
         
-        # Update the post in database
-        # Get the next vent number
-        max_vent = db_fetch_one("SELECT MAX(vent_number) as max_num FROM posts WHERE approved = TRUE")
-        next_vent_number = (max_vent['max_num'] or 0) + 1
-        
         # Update the post in database with vent number
         success = db_execute(
             "UPDATE posts SET approved = TRUE, admin_approved_by = %s, channel_message_id = %s, vent_number = %s WHERE post_id = %s",
@@ -1876,12 +1874,12 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         # Update the admin's message
         try:
             await query.edit_message_text(
-                f"✅ Post approved and published!\n\n{post['content'][:100]}...",
+                f"✅ Post approved and published as {vent_display}!\n\n{post['content'][:100]}...",
                 parse_mode=ParseMode.MARKDOWN
             )
         except BadRequest:
             await query.message.reply_text(
-                f"✅ Post approved and published!\n\n{post['content'][:100]}...",
+                f"✅ Post approved and published as {vent_display}!\n\n{post['content'][:100]}...",
                 parse_mode=ParseMode.MARKDOWN
             )
         db_execute("DELETE FROM pending_notifications WHERE post_id = %s", (post_id,))
