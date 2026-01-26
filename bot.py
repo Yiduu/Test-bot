@@ -1,5 +1,5 @@
 # Add these imports at the top of bot.py (after the existing imports)
-import jwt
+import jwt 
 import requests
 from telegram import WebAppInfo
 from threading import Thread
