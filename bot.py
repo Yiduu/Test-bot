@@ -2753,6 +2753,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
     
     kb = InlineKeyboardMarkup(kb_buttons)
 
+    # In send_comment_message function, find this section and add the missing media handlers:
+
     # Send message based on comment type
     try:
         # Helper function to escape markdown properly
@@ -2766,7 +2768,7 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             return text
         
         if comment_type == 'text':
-            # Escape markdown characters properly
+            # Existing text handling - KEEP AS IS
             escaped_content = escape_markdown_v2(content)
             message_text = f"{escaped_content}\n\n{author_text}"
             msg = await context.bot.send_message(
@@ -2779,8 +2781,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             )
             return msg.message_id
             
-        elif comment_type == 'voice':
-            # Escape markdown in caption
+        elif comment_type == 'voice' and file_id:
+            # FIX: Make sure voice comments are sent
             escaped_caption = escape_markdown_v2(content) if content else ""
             caption = f"{escaped_caption}\n\n{author_text}" if escaped_caption else author_text
             msg = await context.bot.send_voice(
@@ -2793,8 +2795,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             )
             return msg.message_id
             
-        elif comment_type == 'gif':
-            # Escape markdown in caption
+        elif comment_type == 'gif' and file_id:
+            # FIX: Make sure GIF comments are sent
             escaped_caption = escape_markdown_v2(content) if content else ""
             caption = f"{escaped_caption}\n\n{author_text}" if escaped_caption else author_text
             msg = await context.bot.send_animation(
@@ -2807,14 +2809,13 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             )
             return msg.message_id
             
-        elif comment_type == 'sticker':
-            # Stickers can't have captions, so we send the author info separately
+        elif comment_type == 'sticker' and file_id:
+            # FIX: Make sure sticker comments are sent (keep existing logic)
             msg = await context.bot.send_sticker(
                 chat_id=chat_id,
                 sticker=file_id,
                 reply_to_message_id=reply_to_message_id
             )
-            # Escape markdown in author_text
             escaped_author_text = escape_markdown_v2(author_text)
             author_msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -2826,7 +2827,7 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             return author_msg.message_id
             
         else:
-            # Fallback for unknown types
+            # Fallback for unknown types - KEEP AS IS
             escaped_content = escape_markdown_v2(content)
             message_text = f"[{comment_type.upper()}] {escaped_content}\n\n{author_text}"
             msg = await context.bot.send_message(
@@ -4731,48 +4732,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # NEW: Check if we have a thread_from_post_id for continuation
     thread_from_post_id = context.user_data.get('thread_from_post_id')
     
-    if user and user['waiting_for_post']:
-        category = user['selected_category']
-        db_execute(
-            "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
-            (user_id,)
-        )
-        
-        post_content = ""
-        media_type = 'text'
-        media_id = None
-        
-        try:
-            if update.message.text:
-                post_content = update.message.text
-                await send_post_confirmation(update, context, post_content, category, thread_from_post_id=thread_from_post_id)
-                return
-            elif update.message.photo:
-                photo = update.message.photo[-1]
-                media_id = photo.file_id
-                media_type = 'photo'
-                post_content = update.message.caption or ""
-            elif update.message.voice:
-                voice = update.message.voice
-                media_id = voice.file_id
-                media_type = 'voice'
-                post_content = update.message.caption or ""
-            else:
-                if update.message.text in ["❌ Cancel", "cancel"]:
-                    await reset_user_waiting_states(
+    elif user and user['waiting_for_post']:
+    category = user['selected_category']
+    
+    post_content = ""
+    media_type = 'text'
+    media_id = None
+    
+    try:
+        if update.message.text:
+            post_content = update.message.text
+            media_type = 'text'
+        elif update.message.photo:
+            photo = update.message.photo[-1]
+            media_id = photo.file_id
+            media_type = 'photo'
+            post_content = update.message.caption or ""
+        elif update.message.voice:
+            voice = update.message.voice
+            media_id = voice.file_id
+            media_type = 'voice'
+            post_content = update.message.caption or ""
+        else:
+            if text in ["❌ Cancel", "cancel"]:
+                await reset_user_waiting_states(
                     user_id, 
                     update.message.chat.id, 
                     context
                 )
-                    await update.message.reply_text("❌ Input cancelled.", reply_markup=main_menu)
-                    return
-                post_content = "(Unsupported content type)"
-        except Exception as e:
-            logger.error(f"Error reading media: {e}")
-            post_content = "(Unsupported content type)" 
-
-        await send_post_confirmation(update, context, post_content, category, media_type, media_id, thread_from_post_id=thread_from_post_id)
-        return
+                await update.message.reply_text("❌ Input cancelled.", reply_markup=main_menu)
+                return
+            post_content = "(Unsupported content type)"
+    except Exception as e:
+        logger.error(f"Error reading media: {e}")
+        post_content = "(Unsupported content type)" 
+    
+    # FIX: Reset user state for BOTH text and media posts
+    db_execute(
+        "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
+        (user_id,)
+    )
+    
+    # Send confirmation
+    await send_post_confirmation(update, context, post_content, category, media_type, media_id, thread_from_post_id=thread_from_post_id)
+    return
 
     elif user and user['waiting_for_comment']:
         post_id = user['comment_post_id']
