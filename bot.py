@@ -1826,17 +1826,17 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         hashtag = f"#{post['category']}"
         
         # Create the vent number text (copyable format)
-        vent_number_str = f"Vent - {next_vent_number:03d}"
+        vent_display = f"Vent - {next_vent_number:03d}"
         
         caption_text = (
-            f"`{vent_number_str}`\n\n"
+            f"`{vent_display}`\n\n"
             f"{post['content']}\n\n"
             f"━━━━━━━━━━━━━━━\n"
             f"{hashtag}\n"
             f"[Telegram](https://t.me/christianvent)| [Bot](https://t.me/{BOT_USERNAME})"
         )
         
-        # Create the comments button (original format)
+        # Create the comments button
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"💬 Comments (0)", url=f"https://t.me/{BOT_USERNAME}?start=comments_{post_id}")]
         ])
@@ -1902,24 +1902,46 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
         except Exception as e:
             logger.error(f"Error notifying author: {e}")
         
-        # Update the admin's message
+        # =============================================
+        # CRITICAL FIX: Update the admin's original message to remove Approve/Reject buttons
+        # =============================================
         try:
+            # Edit the original admin notification message to show it's approved
             await query.edit_message_text(
-                f"✅ Post approved and published as {vent_display}!\n\n{post['content'][:100]}...",
+                f"✅ **Post Approved and Published!**\n\n"
+                f"**Vent Number:** {vent_display}\n"
+                f"**Category:** {post['category']}\n"
+                f"**Published to channel:** ✅\n\n"
+                f"**Content Preview:**\n{post['content'][:150]}...",
                 parse_mode=ParseMode.MARKDOWN
             )
-        except BadRequest:
+            
+            # Alternative: You can also delete the admin notification message entirely
+            # await query.message.delete()
+            
+        except BadRequest as e:
+            # If editing fails, at least reply with success message
+            logger.error(f"Error updating admin message: {e}")
+            await query.answer("✅ Post approved and published!", show_alert=True)
             await query.message.reply_text(
-                f"✅ Post approved and published as {vent_display}!\n\n{post['content'][:100]}...",
+                f"✅ Post #{post_id} approved and published as {vent_display}!",
                 parse_mode=ParseMode.MARKDOWN
             )
-        db_execute("DELETE FROM pending_notifications WHERE post_id = %s", (post_id,))
+        
+        # =============================================
+        # END CRITICAL FIX
+        # =============================================
+        
     except Exception as e:
         logger.error(f"Error approving post: {e}")
         try:
             await query.answer(f"❌ Failed to approve post: {str(e)}", show_alert=True)
         except:
-            await query.edit_message_text("❌ Failed to approve post. Please try again.")
+            # Try to edit the message with error
+            try:
+                await query.edit_message_text("❌ Failed to approve post. Please try again.")
+            except:
+                pass
 
 async def reject_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id: int):
     query = update.callback_query
@@ -1960,10 +1982,22 @@ async def reject_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_i
             await query.answer("❌ Failed to delete post from database.", show_alert=True)
             return
         
-        # Update the admin's message
+        # =============================================
+        # FIX: Update the admin's message to show it's rejected
+        # =============================================
         try:
-            await query.edit_message_text("❌ Post rejected and deleted")
+            # Edit the original admin notification message
+            await query.edit_message_text(
+                f"❌ **Post Rejected**\n\n"
+                f"**Post ID:** #{post_id}\n"
+                f"**Category:** {post['category']}\n"
+                f"**Action:** Deleted from database\n\n"
+                f"**Content Preview:**\n{post['content'][:100]}...",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            
         except BadRequest:
+            # If editing fails, send a new message
             await query.message.reply_text("❌ Post rejected and deleted")
         
     except Exception as e:
