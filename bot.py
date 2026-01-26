@@ -3693,7 +3693,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{preview_text}\n\n↩️ Please type your *reply* or send a voice message, GIF, or sticker:\n\nTap ❌ Cancel to return to menu.",
                     reply_markup=cancel_menu,
                     parse_mode=ParseMode.MARKDOWN_V2
-                
+                )
 
         # FIXED: Like/Dislike reaction handling
         elif query.data.startswith(("likecomment_", "dislikecomment_", "likereply_", "dislikereply_")):
