@@ -1804,10 +1804,9 @@ async def approve_post(update: Update, context: ContextTypes.DEFAULT_TYPE, post_
             f"[Telegram](https://t.me/christianvent)| [Bot](https://t.me/{BOT_USERNAME})"
         )
         
-        # Create the comments button with vent number
-        vent_display = f"Vent {next_vent_number:03d}"
+        # Create the comments button (original format)
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"💬 {vent_display} (0)", url=f"https://t.me/{BOT_USERNAME}?start=comments_{post_id}")]
+            [InlineKeyboardButton(f"💬 Comments (0)", url=f"https://t.me/{BOT_USERNAME}?start=comments_{post_id}")]
         ])
         
         # Check if this is a thread continuation
