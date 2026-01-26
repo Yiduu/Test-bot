@@ -4732,7 +4732,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # NEW: Check if we have a thread_from_post_id for continuation
     thread_from_post_id = context.user_data.get('thread_from_post_id')
     
-    elif user and user['waiting_for_post']:
+    if user and user['waiting_for_post']:
         category = user['selected_category']
         
         post_content = ""
