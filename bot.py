@@ -2713,7 +2713,9 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
     # Send message based on comment type
     try:
         if comment_type == 'text':
-            message_text = f"{escape_markdown(content, version=2)}\n\n{author_text}"
+            # FIX: Escape markdown characters properly
+            escaped_content = escape_markdown(content, version=2)
+            message_text = f"{escaped_content}\n\n{author_text}"
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=message_text,
@@ -2725,7 +2727,9 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             return msg.message_id
             
         elif comment_type == 'voice':
-            caption = f"{escape_markdown(content, version=2) if content else ''}\n\n{author_text}"
+            # FIX: Escape markdown in caption
+            escaped_caption = escape_markdown(content, version=2) if content else ""
+            caption = f"{escaped_caption}\n\n{author_text}" if escaped_caption else author_text
             msg = await context.bot.send_voice(
                 chat_id=chat_id,
                 voice=file_id,
@@ -2737,7 +2741,9 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             return msg.message_id
             
         elif comment_type == 'gif':
-            caption = f"{escape_markdown(content, version=2) if content else ''}\n\n{author_text}"
+            # FIX: Escape markdown in caption
+            escaped_caption = escape_markdown(content, version=2) if content else ""
+            caption = f"{escaped_caption}\n\n{author_text}" if escaped_caption else author_text
             msg = await context.bot.send_animation(
                 chat_id=chat_id,
                 animation=file_id,
@@ -2755,10 +2761,11 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
                 sticker=file_id,
                 reply_to_message_id=reply_to_message_id
             )
-            # Send author info as a separate message
+            # FIX: Escape markdown in author_text
+            escaped_author_text = escape_markdown(author_text, version=2)
             author_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                text=author_text,
+                text=escaped_author_text,
                 reply_markup=kb,
                 parse_mode=ParseMode.MARKDOWN_V2,
                 reply_to_message_id=msg.message_id
@@ -2767,7 +2774,8 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             
         else:
             # Fallback for unknown types
-            message_text = f"[{comment_type.upper()}] {escape_markdown(content, version=2)}\n\n{author_text}"
+            escaped_content = escape_markdown(content, version=2)
+            message_text = f"[{comment_type.upper()}] {escaped_content}\n\n{author_text}"
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=message_text,
@@ -2780,18 +2788,20 @@ async def send_comment_message(context, chat_id, comment, author_text, reply_to_
             
     except Exception as e:
         logger.error(f"Error sending comment {comment_id}: {e}")
-        # Fallback to text
-        message_text = f"[Media] {escape_markdown(content, version=2)}\n\n{author_text}"
-        msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=message_text,
-            reply_markup=kb,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_to_message_id=reply_to_message_id,
-            disable_web_page_preview=True
-        )
-        return msg.message_id
-
+        # Fallback to text without markdown on error
+        try:
+            message_text = f"[Media] {content}\n\n{author_text}"
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                reply_markup=kb,
+                reply_to_message_id=reply_to_message_id,
+                disable_web_page_preview=True
+            )
+            return msg.message_id
+        except Exception as e2:
+            logger.error(f"Fallback also failed: {e2}")
+            return None
 async def show_comments_page(update, context, post_id, page=1, reply_pages=None):
     if update.effective_chat is None:
         logger.error("Cannot determine chat from update: %s", update)
@@ -2879,14 +2889,15 @@ async def show_comments_page(update, context, post_id, page=1, reply_pages=None)
             # Vent author - add green checkmark before name
             author_text = (
                 f"{display_sex} "
-                f"✅ _[vent author]({profile_link})_ "
+                f"✅ _[vent author]({escape_markdown(profile_link, version=2)})_ "
                 f"⚡ _Aura_ {rating} {format_aura(rating)}"
             )
+
         else:
             # Regular user
             author_text = (
                 f"{display_sex} "
-                f"_[{escape_markdown(display_name, version=2)}]({profile_link})_ "
+                f"_[{escape_markdown(display_name, version=2)}]({escape_markdown(profile_link, version=2)})_ "
                 f"⚡ _Aura_ {rating} {format_aura(rating)}"
             )
 
