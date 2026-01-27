@@ -1,8 +1,7 @@
-python-telegram-bot==20.3
+python-telegram-bot[job-queue]==20.7
 python-dotenv==1.0.0
-Flask==2.3.2
-psycopg2-binary
+Flask==3.0.0
+psycopg2-binary==2.9.9
 PyJWT==2.8.0
 requests==2.31.0
 gunicorn==21.2.0
- 
