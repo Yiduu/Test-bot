@@ -304,7 +304,11 @@ async def fix_vent_numbers(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logger.error(f"Error in fix_vent_numbers: {e}")
                         await update.message.reply_text(f"❌ Error: {str(e)}")
-
+def is_media_message(message):
+    """Check if a message contains media"""
+    return (message.photo or message.voice or message.video or 
+            message.document or message.audio or message.sticker or 
+            message.animation)
 def escape_markdown_v2(text):
     """Escape all special characters for MarkdownV2"""
     if not text:
@@ -1109,6 +1113,7 @@ async def send_post_confirmation(update: Update, context: ContextTypes.DEFAULT_T
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
             else:
+                # For media messages, edit the caption instead of text
                 await update.callback_query.edit_message_caption(
                     caption=preview_text,
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -1139,7 +1144,22 @@ async def send_post_confirmation(update: Update, context: ContextTypes.DEFAULT_T
                     )
     except Exception as e:
         logger.error(f"Error in send_post_confirmation: {e}")
-        if update.message:
+        
+        # Fallback for callback queries with media
+        if update.callback_query and media_type != 'text':
+            try:
+                # Try to send as a new message instead
+                await update.callback_query.message.reply_text(
+                    f"📝 *Post Preview* [{category}]\n\n"
+                    f"{escape_markdown(post_content, version=2)}\n\n"
+                    f"Please confirm your post:",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+            except Exception as e2:
+                logger.error(f"Fallback also failed: {e2}")
+                
+        elif update.message:
             await update.message.reply_text("❌ Error showing confirmation. Please try again.")
         elif update.callback_query:
             await update.callback_query.message.reply_text("❌ Error showing confirmation. Please try again.")
@@ -4257,29 +4277,55 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data in ('edit_post', 'cancel_post', 'confirm_post'):
             pending_post = context.user_data.get('pending_post')
             if not pending_post:
-                await query.message.edit_text("❌ Post data not found. Please start over.")
+                # Handle both text and media messages
+                try:
+                    await query.message.edit_text("❌ Post data not found. Please start over.")
+                except BadRequest:
+                    try:
+                        await query.message.edit_caption("❌ Post data not found. Please start over.")
+                    except:
+                        await query.message.reply_text("❌ Post data not found. Please start over.")
                 return
             
             if query.data == 'edit_post':
                 if time.time() - pending_post.get('timestamp', 0) > 300:
-                    await query.message.edit_text("❌ Edit time expired. Please start a new post.")
+                    # Handle both text and media messages for expiration
+                    try:
+                        await query.message.edit_text("❌ Edit time expired. Please start a new post.")
+                    except BadRequest:
+                        await query.message.edit_caption("❌ Edit time expired. Please start a new post.")
                     del context.user_data['pending_post']
                     return
                     
                 # Store that we're in edit mode
                 context.user_data['editing_post'] = True
                 
-                await query.message.edit_text(
-                    f"✏️ *Edit your post:*\n\n{escape_markdown(pending_post['content'], version=2)}\n\nPlease type your edited post:",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
-                    ]),
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
+                # Edit based on message type
+                try:
+                    await query.message.edit_text(
+                        f"✏️ *Edit your post:*\n\n{escape_markdown(pending_post['content'], version=2)}\n\nPlease type your edited post:",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
+                        ]),
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
+                except BadRequest:
+                    # If it's a media message, edit the caption
+                    await query.message.edit_caption(
+                        caption=f"✏️ *Edit your post:*\n\n{escape_markdown(pending_post['content'], version=2)}\n\nPlease type your edited post:",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("❌ Cancel", callback_data='cancel_input')]
+                        ]),
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
                 return
             
             elif query.data == 'cancel_post':
-                await query.message.edit_text("❌ Post cancelled.")
+                # Handle both text and media messages for cancellation
+                try:
+                    await query.message.edit_text("❌ Post cancelled.")
+                except BadRequest:
+                    await query.message.edit_caption("❌ Post cancelled.")
                 if 'pending_post' in context.user_data:
                     del context.user_data['pending_post']
                 if 'thread_from_post_id' in context.user_data:
@@ -4294,13 +4340,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Show typing animation
                 await typing_animation(context, query.message.chat_id, 0.5)
                 
-                # Show loading
-                loading_msg = await query.message.edit_text("📤 Submitting your post...")
+                # Show loading - handle both text and media
+                try:
+                    loading_msg = await query.message.edit_text("📤 Submitting your post...")
+                except BadRequest:
+                    loading_msg = await query.message.edit_caption("📤 Submitting your post...")
+                
                 await animated_loading(loading_msg, "Processing", 3)
                 
                 pending_post = context.user_data.get('pending_post')
                 if not pending_post:
-                    await replace_with_error(loading_msg, "Post data not found. Please start over.")
+                    # Handle both text and media for error
+                    try:
+                        await loading_msg.edit_text("❌ Post data not found. Please start over.")
+                    except:
+                        await loading_msg.edit_caption("❌ Post data not found. Please start over.")
                     return
                 
                 category = pending_post['category']
@@ -4336,16 +4390,29 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await notify_admin_of_new_post(context, post_id)
                     
                     # Replace loading with success animation
-                    success_msg = await replace_with_success(loading_msg, "Post submitted for approval!")
+                    try:
+                        success_msg = await loading_msg.edit_text("✅ Post submitted for approval!")
+                    except:
+                        success_msg = await loading_msg.edit_caption("✅ Post submitted for approval!")
+                    
                     await asyncio.sleep(1)
                     
                     keyboard = [[InlineKeyboardButton("📱 Main Menu", callback_data='menu')]]
-                    await success_msg.edit_text(
-                        "✅ Your post has been submitted for admin approval!\nYou'll be notified when it's approved and published.",
-                        reply_markup=InlineKeyboardMarkup(keyboard)
-                    )
+                    try:
+                        await success_msg.edit_text(
+                            "✅ Your post has been submitted for admin approval!\nYou'll be notified when it's approved and published.",
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                    except:
+                        await success_msg.edit_caption(
+                            "✅ Your post has been submitted for admin approval!\nYou'll be notified when it's approved and published.",
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
                 else:
-                    await replace_with_error(loading_msg, "Failed to submit post. Please try again.")
+                    try:
+                        await loading_msg.edit_text("❌ Failed to submit post. Please try again.")
+                    except:
+                        await loading_msg.edit_caption("❌ Failed to submit post. Please try again.")
                 return
         elif query.data == 'admin_panel':
             await admin_panel(update, context)
@@ -4754,28 +4821,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 media_type = 'voice'
                 post_content = update.message.caption or ""
             else:
-                if text in ["❌ Cancel", "cancel"]:
-                    await reset_user_waiting_states(
-                        user_id, 
-                        update.message.chat.id, 
-                        context
-                    )
-                    await update.message.reply_text("❌ Input cancelled.", reply_markup=main_menu)
-                    return
-                post_content = "(Unsupported content type)"
+                # Handle other media types or show error
+                await update.message.reply_text(
+                    "❌ Unsupported media type. Please send text, photo, or voice message.",
+                    reply_markup=main_menu
+                )
+                # Reset state
+                db_execute(
+                    "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
+                    (user_id,)
+                )
+                return
+            
+            # FIX: Reset user state for BOTH text and media posts
+            db_execute(
+                "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
+                (user_id,)
+            )
+            
+            # Send confirmation
+            await send_post_confirmation(update, context, post_content, category, media_type, media_id, thread_from_post_id=thread_from_post_id)
+            return
         except Exception as e:
             logger.error(f"Error reading media: {e}")
-            post_content = "(Unsupported content type)" 
-        
-        # FIX: Reset user state for BOTH text and media posts
-        db_execute(
-            "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
-            (user_id,)
-        )
-        
-        # Send confirmation
-        await send_post_confirmation(update, context, post_content, category, media_type, media_id, thread_from_post_id=thread_from_post_id)
-        return
+            await update.message.reply_text(
+                "❌ Error processing your media. Please try again.",
+                reply_markup=main_menu
+            )
+            # Reset state on error
+            db_execute(
+                "UPDATE users SET waiting_for_post = FALSE, selected_category = NULL WHERE user_id = %s",
+                (user_id,)
+            )
+            return
 
     elif user and user['waiting_for_comment']:
         post_id = user['comment_post_id']
