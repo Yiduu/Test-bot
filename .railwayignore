@@ -1,0 +1,17 @@
+# Ignore unnecessary files for Railway deployment
+.env
+.env.local
+*.pyc
+__pycache__/
+venv/
+env/
+*.log
+.DS_Store
+.git/
+.gitignore
+README.md
+*.md
+test*.py
+*.ipynb
+.vscode/
+.idea/
