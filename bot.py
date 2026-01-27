@@ -32,6 +32,27 @@ import random
 import time
 import asyncio
 from typing import Optional
+import signal
+import sys
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info("🚦 Received shutdown signal, cleaning up...")
+    
+    # Close database pool
+    if db_pool:
+        try:
+            db_pool.closeall()
+            logger.info("✅ Database connections closed")
+        except Exception as e:
+            logger.error(f"Error closing database pool: {e}")
+    
+    logger.info("👋 Bot shutdown complete")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 # Load environment variables first
 load_dotenv()
@@ -42,12 +63,27 @@ TOKEN = os.getenv('TOKEN')
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
 BOT_USERNAME = os.getenv('BOT_USERNAME')
 ADMIN_ID = os.getenv('ADMIN_ID')
+# Validate required environment variables
+required_vars = ['TOKEN', 'DATABASE_URL', 'CHANNEL_ID', 'BOT_USERNAME']
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+
+if missing_vars:
+    logger.error(f"❌ Missing required environment variables: {missing_vars}")
+    logger.error("Please set these in Railway dashboard → Variables")
+    # Don't exit immediately - let it fail gracefully for Railway health checks
 
 # Initialize database tables with schema migration
 def init_db():
+    """Initialize database tables with schema migration"""
+    # First initialize the connection pool
+    if not init_database_pool():
+        raise Exception("Failed to initialize database connection pool")
+    
     try:
         with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as c:
+                # ... rest of your existing init_db code ...
+                
                 # ---------------- Create Tables ----------------
                 c.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -210,10 +246,12 @@ def init_db():
                         ON CONFLICT (user_id) DO UPDATE SET is_admin = TRUE
                     ''', (ADMIN_ID, "Admin"))
 
-            conn.commit()
+        pass
+                
         logging.info("PostgreSQL database initialized successfully")
     except Exception as e:
         logging.error(f"Database initialization failed: {e}")
+        raise
 # ==================== LOADING ANIMATIONS ====================
 def assign_vent_numbers_to_existing_posts():
     """Assign vent numbers to existing approved posts"""
@@ -384,7 +422,34 @@ except Exception as e:
     logging.error(f"❌ Failed to create database pool: {e}")
     db_pool = None
 
+# Database helper functions - FIXED VERSION
+# -------------------- PostgreSQL Connection Pool --------------------
 
+def init_database_pool():
+    """Initialize database connection pool"""
+    global db_pool
+    try:
+        # Railway provides DATABASE_URL, Render uses same name
+        database_url = os.environ.get('DATABASE_URL')
+        
+        if not database_url:
+            logger.error("❌ DATABASE_URL environment variable is not set!")
+            return False
+        
+        # Parse the database URL for logging (remove password)
+        safe_url = database_url.split('@')[-1] if '@' in database_url else database_url
+        logger.info(f"🔗 Connecting to database: {safe_url}")
+        
+        db_pool = pool.SimpleConnectionPool(
+            1, 10,  # min 1, max 10 connections
+            dsn=database_url,
+            cursor_factory=RealDictCursor
+        )
+        logging.info("✅ Database connection pool created successfully")
+        return True
+    except Exception as e:
+        logging.error(f"❌ Failed to create database pool: {e}")
+        return False
 def db_execute(query, params=(), fetch=False, fetchone=False):
     """Execute a SQL query using the global connection pool."""
     conn = None
@@ -471,7 +536,8 @@ def build_category_buttons():
 flask_app = Flask(__name__, static_folder='static')
 
 # ==================== FLASK ROUTES ====================
-
+from flask_cors import CORS
+CORS(flask_app)
 # Root shows mini app
 # Root shows mini app with token check
 @flask_app.route('/')
@@ -714,7 +780,28 @@ def test_api():
 # Health check for Render
 @flask_app.route('/health')
 def health_check():
-    return jsonify(status="OK", message="Christian Chat Bot is running")
+    """Enhanced health check for Railway"""
+    try:
+        # Test database connection
+        test_db = db_fetch_one("SELECT 1 as test")
+        if test_db and test_db['test'] == 1:
+            return jsonify({
+                "status": "healthy",
+                "service": "Christian Chat Bot",
+                "database": "connected",
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "status": "unhealthy",
+                "error": "Database connection failed"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e)
+        }), 500
+
 
 # Handle favicon request
 @flask_app.route('/favicon.ico')
@@ -728,12 +815,17 @@ def uptimerobot_ping():
 
 # Serve static files
 @flask_app.route('/static/<path:filename>')
-def static_files(filename):
-    """Serve static files"""
+def serve_static(filename):
+    """Serve static files with proper caching"""
     try:
         return send_from_directory('static', filename)
-    except Exception as e:
-        return f"Error loading file: {e}", 404
+    except:
+        return jsonify(error="File not found"), 404
+
+@flask_app.route('/ready')
+def readiness_probe():
+    """Readiness probe for Railway"""
+    return jsonify(status="ready"), 200
 
 # Create main menu keyboard with improved buttons
 main_menu = ReplyKeyboardMarkup(
@@ -5189,6 +5281,7 @@ async def mini_app_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
 def main():
+    """Main function with Railway compatibility"""
     # Initialize database before starting the bot
     try:
         init_db()
@@ -5199,9 +5292,6 @@ def main():
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         return
-
-
-
     
     # Create and run Telegram bot
     app = Application.builder().token(TOKEN).post_init(set_bot_commands).build()
@@ -5221,20 +5311,32 @@ def main():
     
     app.add_error_handler(error_handler)
     
+    # ==================== RAILWAY COMPATIBILITY ====================
+    # Get PORT from environment (Railway provides this)
+    port = int(os.environ.get("PORT", 5000))
     
-    
-    # Start Flask server in a separate thread for Render
-    port = int(os.environ.get('PORT', 5000))
-    threading.Thread(
-        target=lambda: flask_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False),
+    # Start Flask server in a separate thread for Railway health checks
+    flask_thread = threading.Thread(
+        target=lambda: flask_app.run(
+            host='0.0.0.0', 
+            port=port, 
+            debug=False, 
+            use_reloader=False
+        ),
         daemon=True
-    ).start()
+    )
+    flask_thread.start()
     
     logger.info(f"✅ Flask health check server started on port {port}")
+    logger.info(f"✅ Bot is ready! Starting polling...")
     
     # Start polling
-    logger.info("Starting bot polling...")
-    app.run_polling()
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        poll_interval=1.0,
+        timeout=30
+    )
 
 # In bot.py, replace the simple /mini_app route with this:
 
