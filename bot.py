@@ -554,6 +554,8 @@ def quiz_admin():
         import traceback
         error_msg = traceback.format_exc()
         return f"<h1>Error</h1><pre>{error_msg}</pre>", 500
+from flask import render_template
+
 @flask_app.route('/')
 def easter_home():
     try:
@@ -579,15 +581,15 @@ def easter_home():
             highest = 0
             winner = '—'
         
-        # Use render_template instead of render_template_string
         return render_template('home.html', 
-                              total=total, 
-                              avg=avg, 
-                              highest=highest, 
-                              winner=winner)
+                               total=total, 
+                               avg=avg, 
+                               highest=highest, 
+                               winner=winner)
     except Exception as e:
-        import traceback
-        return f"<pre>{traceback.format_exc()}</pre>", 500
+        # Log the error and show a friendly message
+        print(f"Homepage error: {e}")
+        return "<h1>Something went wrong</h1><p>Please try again later.</p>", 500
 def main_page():
     """Show mini app with authentication check"""
     # Check if there's a token in the URL
