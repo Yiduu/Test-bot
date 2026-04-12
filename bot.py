@@ -149,7 +149,19 @@ def init_db():
                     target_group TEXT DEFAULT 'all',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-                ''')                  
+                ''')
+                c.execute('''
+                CREATE TABLE IF NOT EXISTS easter_quiz_results (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    first_name TEXT,
+                    username TEXT,
+                    score INTEGER,
+                    total_questions INTEGER,
+                    answers JSONB,
+                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                ''')
                 async def schedule_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     """Schedule a broadcast for later"""
                     # Similar to execute_broadcast but stores in database
@@ -479,6 +491,44 @@ from flask import render_template   # already imported
 @flask_app.route('/public-easter-quiz')
 def public_easter_quiz():
     return render_template('easter_quiz.html')
+@flask_app.route('/api/save-quiz-result', methods=['POST'])
+def save_quiz_result():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    first_name = data.get('first_name')
+    username = data.get('username')
+    score = data.get('score')
+    total = data.get('total')
+    answers = data.get('answers')
+    
+    db_execute('''
+        INSERT INTO easter_quiz_results (user_id, first_name, username, score, total_questions, answers)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    ''', (user_id, first_name, username, score, total, json.dumps(answers)))
+    return jsonify({'success': True})
+
+@flask_app.route('/quiz-admin')
+def quiz_admin():
+    secret = request.args.get('secret')
+    if secret != 'EASTER2025':   # change this to your own secret
+        return "Unauthorized", 401
+    results = db_fetch_all("SELECT * FROM easter_quiz_results ORDER BY score DESC, completed_at ASC")
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"><title>Easter Quiz Results</title>
+    <style>body{font-family:Arial;padding:20px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px;text-align:left;} th{background:#f2f2f2;} .winner{background:gold;}</style>
+    </head>
+    <body>
+    <h1>📊 ትንሣኤ ጥያቄ ውጤቶች</h1>
+    <table>
+    <tr><th>User</th><th>Score</th><th>Date</th></tr>
+    '''
+    for r in results:
+        winner_class = 'winner' if r['score'] == max([x['score'] for x in results], default=0) else ''
+        html += f'<tr class="{winner_class}"><td>{r["first_name"]} (@{r["username"]})<br><small>{r["user_id"]}</small></td><td>{r["score"]}/{r["total_questions"]}</td><td>{r["completed_at"]}</td></tr>'
+    html += '</table></body></html>'
+    return html
 @flask_app.route('/')
 def main_page():
     """Show mini app with authentication check"""
