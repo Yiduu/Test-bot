@@ -1,0 +1,160 @@
+HOME_PAGE_HTML = '''
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ትንሣኤ ጥያቄ – የመጽሐፍ ቅዱስ ፈተና</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(135deg, #1e3c2c 0%, #2a4a35 100%);
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans Ethiopic', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .hero {
+            max-width: 800px;
+            width: 100%;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(12px);
+            border-radius: 48px;
+            padding: 40px 30px;
+            text-align: center;
+            border: 1px solid rgba(255,215,0,0.4);
+            box-shadow: 0 25px 45px rgba(0,0,0,0.3);
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+            background: #FFD966;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 3.5rem;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #FFD966;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        .sub {
+            color: #e0e0e0;
+            font-size: 1.1rem;
+            margin-bottom: 40px;
+            border-bottom: 1px dashed rgba(255,215,0,0.5);
+            display: inline-block;
+            padding-bottom: 8px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+        }
+        .stat-card {
+            background: rgba(0,0,0,0.4);
+            border-radius: 24px;
+            padding: 20px 10px;
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            background: rgba(0,0,0,0.5);
+        }
+        .stat-number {
+            font-size: 2.8rem;
+            font-weight: bold;
+            color: #FFD966;
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 8px;
+        }
+        .winner {
+            color: #ffd966;
+            font-weight: bold;
+        }
+        .btn-start {
+            background: #FFD966;
+            color: #1e3c2c;
+            border: none;
+            padding: 16px 40px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-radius: 60px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .btn-start:hover {
+            background: #ffc107;
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        @media (max-width: 550px) {
+            .hero { padding: 30px 20px; }
+            h1 { font-size: 1.8rem; }
+            .stat-number { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="hero">
+    <div class="logo">✝️</div>
+    <h1>ትንሣኤ ጥያቄ</h1>
+    <div class="sub">የመጽሐፍ ቅዱስ እውቀት ፈተና</div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ total }}</div>
+            <div class="stat-label">ተሳታፊዎች</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ avg }}</div>
+            <div class="stat-label">አማካይ ውጤት /10</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ highest }}</div>
+            <div class="stat-label">ከፍተኛ ውጤት /10</div>
+        </div>
+    </div>
+
+    {% if winner != '—' %}
+    <p style="margin-bottom: 10px;">🏆 እስካሁን አሸናፊ: <strong class="winner">{{ winner }}</strong></p>
+    {% else %}
+    <p style="margin-bottom: 10px;">✨ የመጀመሪያ ተሳታፊ ይሁኑ!</p>
+    {% endif %}
+
+    <a href="/public-easter-quiz" class="btn-start">
+        📖 ውድድሩን ጀምር
+    </a>
+    <div class="footer">
+        ክርስቶስ ተነሥቶአል! 🕊️
+    </div>
+</div>
+</body>
+</html>
+'''
