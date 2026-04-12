@@ -555,6 +555,37 @@ def quiz_admin():
         error_msg = traceback.format_exc()
         return f"<h1>Error</h1><pre>{error_msg}</pre>", 500
 @flask_app.route('/')
+def easter_home():
+    """Beautiful homepage with quiz stats and start button"""
+    # Get stats from database
+    stats = db_fetch_one('''
+        SELECT 
+            COUNT(*) as total_participants,
+            AVG(score) as avg_score,
+            MAX(score) as highest_score,
+            (SELECT first_name FROM easter_quiz_results 
+             WHERE score = (SELECT MAX(score) FROM easter_quiz_results) 
+             LIMIT 1) as winner_name
+        FROM easter_quiz_results
+    ''')
+    
+    if stats and stats['total_participants']:
+        total = stats['total_participants']
+        avg = round(stats['avg_score'] or 0, 1)
+        highest = stats['highest_score'] or 0
+        winner = stats['winner_name'] or '—'
+    else:
+        total = 0
+        avg = 0
+        highest = 0
+        winner = '—'
+    
+    # Render HTML template (we'll create it as a string for simplicity, but you can move to templates/ later)
+    return render_template_string(HOME_PAGE_HTML, 
+                                  total=total, 
+                                  avg=avg, 
+                                  highest=highest, 
+                                  winner=winner)
 def main_page():
     """Show mini app with authentication check"""
     # Check if there's a token in the URL
