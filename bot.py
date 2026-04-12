@@ -510,25 +510,50 @@ def save_quiz_result():
 @flask_app.route('/quiz-admin')
 def quiz_admin():
     secret = request.args.get('secret')
-    if secret != 'EASTER2025':   # change this to your own secret
+    if secret != 'EASTER2025':   # change to your own secret
         return "Unauthorized", 401
-    results = db_fetch_all("SELECT * FROM easter_quiz_results ORDER BY score DESC, completed_at ASC")
-    html = '''
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="UTF-8"><title>Easter Quiz Results</title>
-    <style>body{font-family:Arial;padding:20px;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #ddd;padding:8px;text-align:left;} th{background:#f2f2f2;} .winner{background:gold;}</style>
-    </head>
-    <body>
-    <h1>📊 ትንሣኤ ጥያቄ ውጤቶች</h1>
-    <table>
-    <tr><th>User</th><th>Score</th><th>Date</th></tr>
-    '''
-    for r in results:
-        winner_class = 'winner' if r['score'] == max([x['score'] for x in results], default=0) else ''
-        html += f'<tr class="{winner_class}"><td>{r["first_name"]} (@{r["username"]})<br><small>{r["user_id"]}</small></td><td>{r["score"]}/{r["total_questions"]}</td><td>{r["completed_at"]}</td></tr>'
-    html += '</table></body></html>'
-    return html
+    
+    try:
+        results = db_fetch_all("SELECT * FROM easter_quiz_results ORDER BY score DESC, completed_at ASC")
+        
+        if not results:
+            return "<h1>No quiz results yet.</h1>"
+        
+        # Find highest score safely
+        scores = [r['score'] for r in results]
+        highest = max(scores) if scores else 0
+        
+        html = '''
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Easter Quiz Results</title>
+        <style>
+            body{font-family:Arial;padding:20px;background:#1e3c2c;color:#f0f0f0;}
+            table{border-collapse:collapse;width:100%;background:rgba(0,0,0,0.5);border-radius:12px;}
+            th,td{border:1px solid #FFD966;padding:8px;text-align:left;}
+            th{background:#FFD966;color:#1e3c2c;}
+            .winner{background:gold;color:#1e3c2c;font-weight:bold;}
+        </style>
+        </head>
+        <body>
+        <h1>📊 ትንሣኤ ጥያቄ ውጤቶች</h1>
+        <table>
+        <tr><th>User</th><th>Score</th><th>Date</th></tr>
+        '''
+        for r in results:
+            winner_class = 'winner' if r['score'] == highest else ''
+            html += f'<tr class="{winner_class}">'
+            html += f'<td>{r["first_name"]} (@{r["username"]})<br><small>{r["user_id"]}</small></td>'
+            html += f'<td>{r["score"]}/{r["total_questions"]}</td>'
+            html += f'<td>{r["completed_at"]}</td>'
+            html += '</tr>'
+        html += '</table></body></html>'
+        return html
+        
+    except Exception as e:
+        import traceback
+        error_msg = traceback.format_exc()
+        return f"<h1>Error</h1><pre>{error_msg}</pre>", 500
 @flask_app.route('/')
 def main_page():
     """Show mini app with authentication check"""
