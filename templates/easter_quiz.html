@@ -1,4 +1,3 @@
-EASTER_QUIZ_WEBAPP_HTML = '''
 <!DOCTYPE html>
 <html lang="am">
 <head>
@@ -7,7 +6,6 @@ EASTER_QUIZ_WEBAPP_HTML = '''
     <title>ትንሣኤ ጥያቄ</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Styles – compact but beautiful */
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:linear-gradient(135deg,#1e3c2c,#2a4a35);font-family:'Segoe UI',Roboto,sans-serif;padding:20px;color:#f0f0f0}
         .container{max-width:900px;margin:0 auto;background:rgba(255,255,255,0.1);backdrop-filter:blur(4px);border-radius:32px;padding:25px 20px;border:1px solid rgba(255,215,0,0.3)}
@@ -18,9 +16,13 @@ EASTER_QUIZ_WEBAPP_HTML = '''
         .options{display:flex;flex-direction:column;gap:12px;margin:15px 0}
         .option{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.08);padding:12px 15px;border-radius:40px;cursor:pointer;transition:0.2s}
         .option:hover{background:rgba(255,217,102,0.2);transform:translateX(5px)}
-        .option.selected{background:#FFD966;color:#1e3c2c}
-        .option-letter{background:#FFD966;color:#1e3c2c;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+        .option.selected.correct{background:#2e7d32;border-color:#4caf50}
+        .option.selected.wrong{background:#c62828;border-color:#ef5350}
         .option.selected .option-letter{background:#1e3c2c;color:#FFD966}
+        .option-letter{background:#FFD966;color:#1e3c2c;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+        .feedback{background:rgba(0,0,0,0.7);border-radius:12px;padding:12px;margin-top:10px;font-size:0.9rem}
+        .feedback.correct{color:#a5d6a5}
+        .feedback.wrong{color:#ffb3b3}
         .scripture{font-size:0.85rem;margin-top:10px;color:#FFD966;text-align:right}
         .nav-buttons{display:flex;justify-content:space-between;margin-top:20px;gap:15px}
         button{background:#FFD966;border:none;padding:12px 24px;border-radius:40px;font-weight:bold;color:#1e3c2c;cursor:pointer;flex:1}
@@ -29,6 +31,7 @@ EASTER_QUIZ_WEBAPP_HTML = '''
         .result-area{margin-top:25px;background:#1e3c2c;border-radius:24px;padding:20px;text-align:center}
         .score{font-size:2.5rem;font-weight:bold;color:#FFD966}
         footer{text-align:center;margin-top:25px;font-size:0.8rem;opacity:0.7}
+        .next-btn-active{background:#FFD966}
     </style>
 </head>
 <body>
@@ -38,7 +41,7 @@ EASTER_QUIZ_WEBAPP_HTML = '''
     <div id="questionsContainer"></div>
     <div class="nav-buttons">
         <button id="prevBtn" disabled>◀ ቀዳሚ</button>
-        <button id="nextBtn">ቀጣይ ▶</button>
+        <button id="nextBtn" disabled style="opacity:0.5;">ቀጣይ ▶</button>
         <button id="submitBtn" style="display:none;">✅ ውጤቴን አሳይ</button>
         <button id="resetBtn" class="reset-btn">⟳ ከመጀመሪያ</button>
     </div>
@@ -46,7 +49,7 @@ EASTER_QUIZ_WEBAPP_HTML = '''
     <footer>ክርስቶስ ተነሥቶአል! ✝️</footer>
 </div>
 <script>
-    // ---------- The 10 questions (copy exactly) ----------
+    // ---------- 10 Questions (same as before) ----------
     const questions = [
         { text: "መልአኩም መልሶ ሴቶቹን አላቸው፡— እናንተስ አትፍሩ...", options: ["ማርቆስ 16:6","ማቴዎስ 28:5-6","ሉቃስ 24:5","ዮሐንስ 20:15"], correct:1, explanation:"በማቴዎስ ወንጌል", scripture:"ማቴዎስ 28:5-6" },
         { text: "ኢየሱስም፡— ትንሣኤና ሕይወት እኔ ነኝ...", options: ["ዮሐንስ 14:6","ዮሐንስ 11:25","ዮሐንስ 5:24","ዮሐንስ 3:16"], correct:1, explanation:"ኢየሱስ ከማርታ ጋር ተናግሯል", scripture:"ዮሐንስ 11:25" },
@@ -62,6 +65,9 @@ EASTER_QUIZ_WEBAPP_HTML = '''
 
     let currentIndex = 0;
     let userAnswers = new Array(questions.length).fill(null);
+    let userFeedback = new Array(questions.length).fill(null); // stores { isCorrect, explanation, scripture }
+    let answered = new Array(questions.length).fill(false);
+    
     let tg = window.Telegram.WebApp;
     tg.expand();
     let user = tg.initDataUnsafe?.user || { id: 'anonymous', first_name: 'Guest', username: 'guest' };
@@ -76,46 +82,143 @@ EASTER_QUIZ_WEBAPP_HTML = '''
     const resetBtn = document.getElementById('resetBtn');
     const resultArea = document.getElementById('resultArea');
 
-    function escapeHtml(str) { return str.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+    function escapeHtml(str) { 
+        if(!str) return '';
+        return str.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;});
+    }
+
     function renderCurrentQuestion() {
         const q = questions[currentIndex];
+        const hasAnswered = answered[currentIndex];
+        const selectedIdx = userAnswers[currentIndex];
+        const feedback = userFeedback[currentIndex];
+        
         let html = `<div class="question-card"><div class="question-text">${currentIndex+1}. ${escapeHtml(q.text)}</div><div class="options">`;
         q.options.forEach((opt, idx) => {
             const letter = String.fromCharCode(65+idx);
-            const isSelected = (userAnswers[currentIndex] === idx);
-            html += `<div class="option ${isSelected ? 'selected' : ''}" data-opt-index="${idx}"><div class="option-letter">${letter}</div><div class="option-text">${escapeHtml(opt)}</div></div>`;
+            let additionalClass = '';
+            if (hasAnswered && selectedIdx === idx) {
+                additionalClass = (idx === q.correct) ? 'correct' : 'wrong';
+            }
+            const isSelected = (selectedIdx === idx);
+            html += `<div class="option ${isSelected ? 'selected ' + additionalClass : ''}" data-opt-index="${idx}">
+                        <div class="option-letter">${letter}</div>
+                        <div class="option-text">${escapeHtml(opt)}</div>
+                    </div>`;
         });
-        html += `</div><div class="scripture">📖 መጽሐፍ ቅዱስ: ${q.scripture}</div></div>`;
+        html += `</div>`;
+        
+        // Show feedback if answered
+        if (hasAnswered && feedback) {
+            const feedbackClass = feedback.isCorrect ? 'correct' : 'wrong';
+            html += `<div class="feedback ${feedbackClass}">
+                        ${feedback.isCorrect ? '✅ ትክክል ነው!' : '❌ ትክክል አይደለም።'}
+                        <br>📘 ${escapeHtml(feedback.explanation)}
+                        <div class="scripture">📖 መጽሐፍ ቅዱስ: ${feedback.scripture}</div>
+                    </div>`;
+        }
+        html += `</div>`;
         container.innerHTML = html;
-        document.querySelectorAll('.option').forEach(opt => {
-            opt.addEventListener('click', () => { selectOption(currentIndex, parseInt(opt.dataset.optIndex)); renderCurrentQuestion(); });
+        
+        // Attach click handlers to options (only if not already answered)
+        document.querySelectorAll('.option').forEach(optDiv => {
+            optDiv.addEventListener('click', () => {
+                if (answered[currentIndex]) {
+                    tg.showAlert("ይቅርታ፣ ለዚህ ጥያቄ መልስ አስቀድመህ መርጠሃል። ወደሚቀጥለው ሂድ።");
+                    return;
+                }
+                const chosen = parseInt(optDiv.dataset.optIndex);
+                const isCorrect = (chosen === q.correct);
+                // Store answer
+                userAnswers[currentIndex] = chosen;
+                answered[currentIndex] = true;
+                userFeedback[currentIndex] = {
+                    isCorrect: isCorrect,
+                    explanation: q.explanation,
+                    scripture: q.scripture
+                };
+                // Re-render to show feedback
+                renderCurrentQuestion();
+                // Enable next button
+                nextBtn.disabled = false;
+                nextBtn.style.opacity = '1';
+                // If last question, show submit button instead
+                if (currentIndex === questions.length-1) {
+                    nextBtn.style.display = 'none';
+                    submitBtn.style.display = 'block';
+                }
+            });
         });
+        
+        // Update prev button
         prevBtn.disabled = (currentIndex === 0);
-        if (currentIndex === questions.length-1) { nextBtn.style.display = 'none'; submitBtn.style.display = 'block'; }
-        else { nextBtn.style.display = 'block'; submitBtn.style.display = 'none'; }
+        // Update next/submit visibility
+        if (currentIndex === questions.length-1) {
+            nextBtn.style.display = 'none';
+            submitBtn.style.display = answered[currentIndex] ? 'block' : 'none';
+        } else {
+            nextBtn.style.display = 'block';
+            submitBtn.style.display = 'none';
+            // Enable next only if current answered
+            if (answered[currentIndex]) {
+                nextBtn.disabled = false;
+                nextBtn.style.opacity = '1';
+            } else {
+                nextBtn.disabled = true;
+                nextBtn.style.opacity = '0.5';
+            }
+        }
     }
-    function selectOption(qIdx, optIdx) { userAnswers[qIdx] = optIdx; }
-    function goPrev() { if(currentIndex>0) { currentIndex--; renderCurrentQuestion(); } }
-    function goNext() { if(currentIndex<questions.length-1) { currentIndex++; renderCurrentQuestion(); } }
+
+    function goPrev() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            renderCurrentQuestion();
+        }
+    }
+    
+    function goNext() {
+        if (currentIndex < questions.length-1 && answered[currentIndex]) {
+            currentIndex++;
+            renderCurrentQuestion();
+        }
+    }
+    
     function calculateScore() {
-        let correct=0, results=[];
+        let correctCount = 0;
+        let results = [];
         for(let i=0;i<questions.length;i++) {
             const isCorrect = (userAnswers[i] === questions[i].correct);
-            if(isCorrect) correct++;
-            results.push({ userChoice: userAnswers[i]!==null ? questions[i].options[userAnswers[i]] : "አልመለሰም", correctAnswer: questions[i].options[questions[i].correct], isCorrect, explanation: questions[i].explanation, scripture: questions[i].scripture });
+            if(isCorrect) correctCount++;
+            results.push({
+                userChoice: userAnswers[i]!==null ? questions[i].options[userAnswers[i]] : "አልመለሰም",
+                correctAnswer: questions[i].options[questions[i].correct],
+                isCorrect: isCorrect,
+                explanation: questions[i].explanation,
+                scripture: questions[i].scripture
+            });
         }
-        return { correctCount: correct, total: questions.length, results };
+        return { correctCount, total: questions.length, results };
     }
+    
     async function showResult() {
         const { correctCount, total, results } = calculateScore();
-        let resultHtml = `<div class="score">${correctCount} / ${total}</div><div>ውጤት: ${Math.round(correctCount/total*100)}%</div><hr>`;
-        results.forEach((res, idx) => {
-            resultHtml += `<div style="text-align:left; margin-bottom:15px;"><strong>${idx+1}. ${escapeHtml(questions[idx].text.substring(0,80))}...</strong><br>${res.isCorrect ? '✅ ትክክል' : '❌ ስህተት'}<br>መልስህ: ${escapeHtml(res.userChoice)}<br>ትክክለኛው: ${escapeHtml(res.correctAnswer)}<br><span style="background:rgba(0,0,0,0.3); padding:5px;">📘 ${res.explanation} (${res.scripture})</span></div>`;
-        });
+        let resultHtml = `<div class="score">${correctCount} / ${total}</div>
+                          <div>ውጤት: ${Math.round(correctCount/total*100)}%</div><hr>`;
+        for(let i=0;i<results.length;i++) {
+            const res = results[i];
+            resultHtml += `<div style="text-align:left; margin-bottom:15px;">
+                            <strong>${i+1}. ${escapeHtml(questions[i].text.substring(0,80))}...</strong><br>
+                            ${res.isCorrect ? '✅ ትክክል' : '❌ ስህተት'}<br>
+                            መልስህ: ${escapeHtml(res.userChoice)}<br>
+                            ትክክለኛው: ${escapeHtml(res.correctAnswer)}<br>
+                            <span style="background:rgba(0,0,0,0.3); padding:5px;">📘 ${escapeHtml(res.explanation)} (${res.scripture})</span>
+                        </div>`;
+        }
         resultArea.innerHTML = resultHtml;
         resultArea.style.display = 'block';
         document.querySelector('.nav-buttons').style.display = 'none';
-
+        
         // Save to server
         const answersArray = userAnswers.map(a => a !== null ? a : -1);
         try {
@@ -132,13 +235,25 @@ EASTER_QUIZ_WEBAPP_HTML = '''
             tg.showAlert(`ውጤትህ ተመዝግቧል! ክርስቶስ ተነሥቶአል ✝️`);
         } catch(e) { console.error(e); }
     }
-    function resetQuiz() { userAnswers.fill(null); currentIndex=0; resultArea.style.display='none'; document.querySelector('.nav-buttons').style.display='flex'; renderCurrentQuestion(); }
+    
+    function resetQuiz() {
+        userAnswers.fill(null);
+        answered.fill(false);
+        userFeedback.fill(null);
+        currentIndex = 0;
+        resultArea.style.display = 'none';
+        document.querySelector('.nav-buttons').style.display = 'flex';
+        nextBtn.style.display = 'block';
+        submitBtn.style.display = 'none';
+        renderCurrentQuestion();
+    }
+    
     prevBtn.addEventListener('click', goPrev);
     nextBtn.addEventListener('click', goNext);
     submitBtn.addEventListener('click', showResult);
     resetBtn.addEventListener('click', resetQuiz);
+    
     renderCurrentQuestion();
 </script>
 </body>
 </html>
-'''
