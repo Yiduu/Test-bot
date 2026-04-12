@@ -11,6 +11,9 @@
         .container{max-width:900px;margin:0 auto;background:rgba(255,255,255,0.1);backdrop-filter:blur(4px);border-radius:32px;padding:25px 20px;border:1px solid rgba(255,215,0,0.3)}
         h1{text-align:center;color:#FFD966;margin-bottom:8px}
         .sub{text-align:center;margin-bottom:25px;opacity:0.9}
+        .timer-bar{background:#2e7d32;border-radius:40px;height:12px;margin:10px 0 20px;overflow:hidden}
+        .timer-progress{height:100%;width:100%;background:#FFD966;transition:width 1s linear}
+        .timer-text{text-align:center;font-size:1.2rem;margin:5px 0;font-weight:bold;color:#FFD966}
         .question-card{background:rgba(0,0,0,0.5);border-radius:24px;padding:20px;margin-bottom:20px;border-left:5px solid #FFD966}
         .question-text{font-size:1.2rem;font-weight:600;margin-bottom:15px;line-height:1.5;word-wrap:break-word}
         .options{display:flex;flex-direction:column;gap:12px;margin:15px 0}
@@ -35,7 +38,9 @@
 <body>
 <div class="container">
     <h1>🕊️ ትንሣኤ ጥያቄ</h1>
-    <div class="sub">ትንሳዔ የተመለከቱ  ጥያቄዎች</div>
+    <div class="sub">ትንሳዔ የተመለከቱ ጥያቄዎች</div>
+    <div id="timerText" class="timer-text">⏱️ 30 ሰከንድ ቀርቷል</div>
+    <div class="timer-bar"><div id="timerProgress" class="timer-progress" style="width:100%"></div></div>
     <div id="questionsContainer"></div>
     <div class="nav-buttons">
         <button id="prevBtn" disabled>◀ ቀዳሚ</button>
@@ -64,7 +69,10 @@
     let userAnswers = new Array(questions.length).fill(null);
     let userFeedback = new Array(questions.length).fill(null);
     let answered = new Array(questions.length).fill(false);
-    
+    let timerInterval = null;
+    let timeLeft = 30;
+    let autoMoveActive = false;
+
     let tg = window.Telegram.WebApp;
     tg.expand();
     let user = tg.initDataUnsafe?.user || { id: 'anonymous', first_name: 'Guest', username: 'guest' };
@@ -78,6 +86,60 @@
     const submitBtn = document.getElementById('submitBtn');
     const resetBtn = document.getElementById('resetBtn');
     const resultArea = document.getElementById('resultArea');
+    const timerText = document.getElementById('timerText');
+    const timerProgress = document.getElementById('timerProgress');
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    function startTimer() {
+        stopTimer();
+        timeLeft = 30;
+        updateTimerDisplay();
+        timerInterval = setInterval(() => {
+            if (autoMoveActive) return;
+            if (timeLeft <= 1) {
+                stopTimer();
+                if (!answered[currentIndex]) {
+                    autoMoveActive = true;
+                    const q = questions[currentIndex];
+                    userAnswers[currentIndex] = -1;
+                    answered[currentIndex] = true;
+                    userFeedback[currentIndex] = {
+                        isCorrect: false,
+                        explanation: q.explanation,
+                        scripture: q.scripture
+                    };
+                    renderCurrentQuestion();
+                    setTimeout(() => {
+                        autoMoveActive = false;
+                        if (currentIndex === questions.length-1) {
+                            showResult();
+                        } else {
+                            goNext();
+                        }
+                    }, 1500);
+                }
+            } else {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 5) {
+                    timerText.style.color = "#ff6b6b";
+                    timerProgress.style.background = "#ff6b6b";
+                }
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay() {
+        timerText.textContent = `⏱️ ${timeLeft} ሰከንድ ቀርቷል`;
+        const percent = (timeLeft / 30) * 100;
+        timerProgress.style.width = `${percent}%`;
+    }
 
     function escapeHtml(str) { 
         if(!str) return '';
@@ -85,6 +147,7 @@
     }
 
     function renderCurrentQuestion() {
+        stopTimer();
         const q = questions[currentIndex];
         const hasAnswered = answered[currentIndex];
         const selectedIdx = userAnswers[currentIndex];
@@ -118,47 +181,48 @@
         html += `</div>`;
         container.innerHTML = html;
         
-        // Attach click handlers only if not answered
-        document.querySelectorAll('.option').forEach(optDiv => {
-            optDiv.addEventListener('click', () => {
-                if (answered[currentIndex]) {
-                    tg.showAlert("ይቅርታ፣ ለዚህ ጥያቄ መልስ አስቀድመህ መርጠሃል። ወደሚቀጥለው ሂድ።");
-                    return;
-                }
-                const chosen = parseInt(optDiv.dataset.optIndex);
-                const isCorrect = (chosen === q.correct);
-                userAnswers[currentIndex] = chosen;
-                answered[currentIndex] = true;
-                userFeedback[currentIndex] = {
-                    isCorrect: isCorrect,
-                    explanation: q.explanation,
-                    scripture: q.scripture
-                };
-                renderCurrentQuestion();
-                // Enable next button
+        if (!hasAnswered) {
+            document.querySelectorAll('.option').forEach(optDiv => {
+                optDiv.addEventListener('click', () => {
+                    if (answered[currentIndex]) return;
+                    const chosen = parseInt(optDiv.dataset.optIndex);
+                    const isCorrect = (chosen === q.correct);
+                    userAnswers[currentIndex] = chosen;
+                    answered[currentIndex] = true;
+                    userFeedback[currentIndex] = {
+                        isCorrect: isCorrect,
+                        explanation: q.explanation,
+                        scripture: q.scripture
+                    };
+                    stopTimer();
+                    renderCurrentQuestion();
+                    nextBtn.disabled = false;
+                    nextBtn.style.opacity = '1';
+                    if (currentIndex === questions.length-1) {
+                        nextBtn.style.display = 'none';
+                        submitBtn.style.display = 'block';
+                    }
+                });
+            });
+            if (!answered[currentIndex]) {
+                startTimer();
+            }
+        } else {
+            if (currentIndex === questions.length-1) {
+                nextBtn.style.display = 'none';
+                submitBtn.style.display = 'block';
+            } else {
+                nextBtn.style.display = 'block';
+                submitBtn.style.display = 'none';
                 nextBtn.disabled = false;
                 nextBtn.style.opacity = '1';
-                if (currentIndex === questions.length-1) {
-                    nextBtn.style.display = 'none';
-                    submitBtn.style.display = 'block';
-                }
-            });
-        });
+            }
+        }
         
         prevBtn.disabled = (currentIndex === 0);
-        if (currentIndex === questions.length-1) {
+        if (currentIndex === questions.length-1 && !answered[currentIndex]) {
             nextBtn.style.display = 'none';
-            submitBtn.style.display = answered[currentIndex] ? 'block' : 'none';
-        } else {
-            nextBtn.style.display = 'block';
             submitBtn.style.display = 'none';
-            if (answered[currentIndex]) {
-                nextBtn.disabled = false;
-                nextBtn.style.opacity = '1';
-            } else {
-                nextBtn.disabled = true;
-                nextBtn.style.opacity = '0.5';
-            }
         }
     }
 
@@ -183,7 +247,7 @@
             const isCorrect = (userAnswers[i] === questions[i].correct);
             if(isCorrect) correctCount++;
             results.push({
-                userChoice: userAnswers[i]!==null ? questions[i].options[userAnswers[i]] : "አልመለሰም",
+                userChoice: userAnswers[i]!==null && userAnswers[i]!==-1 ? questions[i].options[userAnswers[i]] : "ጊዜ አልቅቶአል",
                 correctAnswer: questions[i].options[questions[i].correct],
                 isCorrect: isCorrect,
                 explanation: questions[i].explanation,
@@ -194,6 +258,7 @@
     }
     
     async function showResult() {
+        stopTimer();
         const { correctCount, total, results } = calculateScore();
         let resultHtml = `<div class="score">${correctCount} / ${total}</div>
                           <div>ውጤት: ${Math.round(correctCount/total*100)}%</div><hr>`;
@@ -210,6 +275,8 @@
         resultArea.innerHTML = resultHtml;
         resultArea.style.display = 'block';
         document.querySelector('.nav-buttons').style.display = 'none';
+        document.querySelector('.timer-bar').style.display = 'none';
+        timerText.style.display = 'none';
         
         const answersArray = userAnswers.map(a => a !== null ? a : -1);
         try {
@@ -228,12 +295,15 @@
     }
     
     function resetQuiz() {
+        stopTimer();
         userAnswers.fill(null);
         answered.fill(false);
         userFeedback.fill(null);
         currentIndex = 0;
         resultArea.style.display = 'none';
         document.querySelector('.nav-buttons').style.display = 'flex';
+        document.querySelector('.timer-bar').style.display = 'block';
+        timerText.style.display = 'block';
         nextBtn.style.display = 'block';
         submitBtn.style.display = 'none';
         renderCurrentQuestion();
