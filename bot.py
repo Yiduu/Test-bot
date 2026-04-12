@@ -474,6 +474,11 @@ flask_app = Flask(__name__, static_folder='static')
 
 # Root shows mini app
 # Root shows mini app with token check
+from flask import render_template   # already imported
+
+@flask_app.route('/public-easter-quiz')
+def public_easter_quiz():
+    return render_template('easter_quiz.html')
 @flask_app.route('/')
 def main_page():
     """Show mini app with authentication check"""
